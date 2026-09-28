@@ -14,6 +14,10 @@ npm run typecheck
 npm run build
 ```
 
+## Deploy (Netlify)
+
+`netlify.toml` configures everything: build command `npm run build`, publish directory `dist`, Node 22, and a catch-all redirect to `index.html` so deep links like `/projects/p-at/sprints/…` work. If the site was created before this file existed, check **Site configuration › Build & deploy** and clear any manually set publish directory (it must be `dist`, not the repo root), then trigger a new deploy.
+
 ## What's in this module
 
 | Area | What you can do |
