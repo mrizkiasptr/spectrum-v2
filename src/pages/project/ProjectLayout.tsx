@@ -12,6 +12,7 @@ import { NotFound } from '../misc';
 
 const TABS: { to: string; label: string; icon: IconName; end?: boolean }[] = [
   { to: '', label: 'Overview', icon: 'gauge', end: true },
+  { to: 'dashboard', label: 'Dashboard', icon: 'chart' },
   { to: 'backlog', label: 'Backlog', icon: 'layers' },
   { to: 'sprints', label: 'Sprints', icon: 'refresh' },
   { to: 'releases', label: 'Releases', icon: 'box' },

@@ -22,6 +22,8 @@ npm run build
 
 | Area | What you can do |
 | --- | --- |
+| **Dashboard** (`/dashboard`, `?tribe=<name>`) | Portfolio view for PMs across tribes or one tribe: running projects, active-sprint progress, health mix, overdue tasks, open defects, a card per tribe, a sortable project table (health, progress vs time, tasks by status, velocity trend), and a **Needs a decision** list. |
+| **Project › Dashboard** | Health with reasons, sprint progress vs elapsed working time, velocity chart (completed sprints + current sprint so far), tasks per board column, workload per person (delivered vs open weight), overdue tasks. |
 | **Project Board** (`/projects`) | All / Favorites / My projects, status + tribe filters, search, grid or list view, recently opened, create a project. Each card shows the active sprint, its goal and progress, and one click opens the board. |
 | **Project › Overview** | Active sprint (goal, progress by status, working days left), **Needs attention** with a next step for every item, backlog / release / quality metrics, my tasks in the sprint. |
 | **Project › Backlog** | Ordered product backlog, inline weight estimate, sprint-readiness (weight + acceptance criteria), bulk add to a sprint with undo. |
@@ -48,6 +50,9 @@ Other sidebar modules (Squad Health Check, Work Performance, …) show a placeho
 - **Goal outcome** is recorded only when the sprint is completed, so an active sprint is never shown as "Not achieved".
 - Backlog items are **sprint-ready** when they have a weight and at least one acceptance criterion.
 - **Workflow columns are flexible.** Each column has a name, color, and a category (*counts as* Not started, In progress, In review, or Done). Progress, burndown, due-date warnings, and releases use the category, so custom columns like "Ready for QA" still count correctly. A workflow needs at least two columns and at least one Done column; column names are unique. New columns are inserted before Done. New tasks land in the first *Not started* column.
+
+- **Health** compares the active sprint's progress (by weight, or task count when nothing is estimated) with the share of its working days already elapsed. Up to 10 pts behind = *On track*, up to 25 = *At risk*, more = *Off track*. A sprint past its end date is *Off track*; an open critical defect turns *On track* into *At risk*. Projects without an active sprint show *No active sprint*.
+- **Velocity** is the delivered weight of the last 5 completed sprints.
 
 ## Code map
 
