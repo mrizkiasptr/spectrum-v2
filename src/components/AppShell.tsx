@@ -67,7 +67,7 @@ function Sidebar({ onSearch }: { onSearch: () => void }) {
 
       <div className="nav-group">
         <span className="nav-group-title">Main</span>
-        <NavItem to="/dashboard" icon="gauge" label="Dashboard" />
+        <NavItem to="/home" icon="home" label="Home" />
         <NavItem to="/my-tasks" icon="tasks" label="My tasks" count={myOpen} />
       </div>
       <div className="nav-group">

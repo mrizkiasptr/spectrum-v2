@@ -12,6 +12,7 @@ import { SprintSetupDialog } from '../../features/SprintSetupDialog';
 import { useProject, useToday } from '../../store/hooks';
 import { useStore } from '../../store/useStore';
 import { NotFound } from '../misc';
+import { tribePath } from '../TribePage';
 
 export interface SprintCtx {
   project: Project;
@@ -69,6 +70,7 @@ export function SprintLayout() {
       <Topbar
         crumbs={[
           { label: 'Project Board', to: '/projects' },
+          { label: `Tribe ${project.tribe}`, to: tribePath(project.tribe) },
           { label: project.name, to: `/projects/${project.id}` },
           { label: 'Sprints', to: `/projects/${project.id}/sprints` },
           { label: sprintName(sprint), to: base },

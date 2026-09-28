@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { NavLink, Outlet, useLocation, useOutletContext, useParams } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation, useOutletContext, useParams } from 'react-router-dom';
 import { Topbar } from '../../components/AppShell';
 import { Icon, type IconName } from '../../components/Icon';
 import { toast } from '../../components/toast';
@@ -9,10 +9,10 @@ import type { Project } from '../../domain/types';
 import { useProject, useProjectItems } from '../../store/hooks';
 import { useStore } from '../../store/useStore';
 import { NotFound } from '../misc';
+import { tribePath } from '../TribePage';
 
 const TABS: { to: string; label: string; icon: IconName; end?: boolean }[] = [
-  { to: '', label: 'Overview', icon: 'gauge', end: true },
-  { to: 'dashboard', label: 'Dashboard', icon: 'chart' },
+  { to: '', label: 'Dashboard', icon: 'gauge', end: true },
   { to: 'backlog', label: 'Backlog', icon: 'layers' },
   { to: 'sprints', label: 'Sprints', icon: 'refresh' },
   { to: 'releases', label: 'Releases', icon: 'box' },
@@ -57,6 +57,7 @@ export function ProjectLayout() {
       <Topbar
         crumbs={[
           { label: 'Project Board', to: '/projects' },
+          { label: `Tribe ${project.tribe}`, to: tribePath(project.tribe) },
           { label: project.name, to: `/projects/${project.id}` },
           ...(section ? [{ label: section.label }] : []),
         ]}
@@ -83,7 +84,7 @@ export function ProjectLayout() {
               <div className="row wrap muted" style={{ fontSize: 13, gap: 8 }}>
                 {project.description && <span>{project.description}</span>}
                 <span aria-hidden="true">·</span>
-                <TribeBadge tribe={project.tribe} />
+                <Link to={tribePath(project.tribe)} aria-label={`Open tribe ${project.tribe} dashboard`}><TribeBadge tribe={project.tribe} /></Link>
                 <span className="num">{fmtRange(project.startDate, project.endDate)}</span>
               </div>
             </div>

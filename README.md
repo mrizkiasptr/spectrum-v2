@@ -22,10 +22,9 @@ npm run build
 
 | Area | What you can do |
 | --- | --- |
-| **Dashboard** (`/dashboard`, `?tribe=<name>`) | Portfolio view for PMs across tribes or one tribe: running projects, active-sprint progress, health mix, overdue tasks, open defects, a card per tribe, a sortable project table (health, progress vs time, tasks by status, velocity trend), and a **Needs a decision** list. |
-| **Project › Dashboard** | Health with reasons, sprint progress vs elapsed working time, velocity chart (completed sprints + current sprint so far), tasks per board column, workload per person (delivered vs open weight), overdue tasks. |
-| **Project Board** (`/projects`) | All / Favorites / My projects, status + tribe filters, search, grid or list view, recently opened, create a project. Each card shows the active sprint, its goal and progress, and one click opens the board. |
-| **Project › Overview** | Active sprint (goal, progress by status, working days left), **Needs attention** with a next step for every item, backlog / release / quality metrics, my tasks in the sprint. |
+| **Project Board** (`/projects`) | Tribe cards on top (running projects, health mix, sprint progress, overdue, defects) — pick one to open its dashboard. Below: All / Favorites / My projects, status + tribe filters, search, grid or list view, recently opened, create a project. Each card shows the active sprint, its goal and progress, and one click opens the board. |
+| **Tribe dashboard** (`/projects/tribe/:tribe`) | KPIs for the tribe, every project in it (health, active sprint, progress vs time, tasks by status, overdue, defects, velocity trend) sortable by health, and a **Needs a decision** list. Switch tribe from the header. |
+| **Project › Dashboard** (project landing page) | Health with reasons, the active sprint (goal, progress vs elapsed working time, status mix), **Needs attention** with a next step for each, KPIs (velocity, goals met, backlog readiness, overdue, defects), **every sprint in the project** (dates, goal, tasks, delivered weight, goal outcome — click to open), velocity chart, tasks per board column, workload per person, overdue tasks. |
 | **Project › Backlog** | Ordered product backlog, inline weight estimate, sprint-readiness (weight + acceptance criteria), bulk add to a sprint with undo. |
 | **Project › Sprints** | Active / Planned / Completed groups. Create, set up, start, edit, complete, and delete draft sprints. |
 | **Sprint setup** | Required sprint goal, flexible length (1–4 weeks or custom dates), overlap check, >1 month warning, holiday-aware working days, save length as project default. |

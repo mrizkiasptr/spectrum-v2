@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Topbar } from '../components/AppShell';
 import { HealthBadge, ProgressVsTime, Sparkbars, StatTile, StatusLegend, StatusMiniBar } from '../components/charts';
 import { Icon } from '../components/Icon';
@@ -10,31 +10,77 @@ import type { Tribe } from '../domain/types';
 import { TRIBES } from '../domain/types';
 import { useToday } from '../store/hooks';
 import { useStore } from '../store/useStore';
+import { NotFound } from './misc';
 
 type SortKey = 'health' | 'progress' | 'overdue' | 'name';
 
-/**
- * Portfolio and tribe dashboard for PMs: which projects are on track, where work is stuck,
- * and what needs a decision. `?tribe=<name>` narrows it to one tribe.
- */
-export function DashboardPage() {
+export const tribePath = (t: Tribe) => `/projects/tribe/${encodeURIComponent(t)}`;
+
+export function useInsights() {
   const projects = useStore((s) => s.projects);
   const sprints = useStore((s) => s.sprints);
   const items = useStore((s) => s.items);
   const holidays = useStore((s) => s.holidays);
   const today = useToday();
-  const [params, setParams] = useSearchParams();
-  const tribe = (TRIBES as string[]).includes(params.get('tribe') ?? '') ? (params.get('tribe') as Tribe) : null;
+  return useMemo(() => projects.map((p) => projectInsight(p, sprints, items, holidays, today)), [projects, sprints, items, holidays, today]);
+}
+
+/** One card per tribe on the Project Board; each opens that tribe's dashboard. */
+export function TribeCards({ insights }: { insights: ProjectInsight[] }) {
+  return (
+    <div className="grid-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))' }}>
+      {TRIBES.map((t) => {
+        const list = insights.filter((i) => i.project.tribe === t && i.project.status === 'active');
+        const s = summarize(list);
+        const tp = s.weightTotal ? Math.round((s.weightDone / s.weightTotal) * 100) : 0;
+        return (
+          <Link
+            key={t}
+            to={tribePath(t)}
+            className="card"
+            style={{ padding: 16, color: 'var(--text)', textDecoration: 'none', display: 'flex', flexDirection: 'column', gap: 10 }}
+            aria-label={`Open tribe ${t} dashboard`}
+          >
+            <div className="row">
+              <TribeBadge tribe={t} />
+              <span className="grow" />
+              <span className="row muted" style={{ gap: 2, fontSize: 12, fontWeight: 600 }}>Dashboard <Icon name="chevronRight" size={14} /></span>
+            </div>
+            <div className="row" style={{ alignItems: 'baseline', gap: 8 }}>
+              <span className="num" style={{ fontSize: 24, fontWeight: 700 }}>{s.projects}</span>
+              <span className="muted" style={{ fontSize: 13 }}>running project{s.projects === 1 ? '' : 's'} · {s.activeSprints} sprint{s.activeSprints === 1 ? '' : 's'} active</span>
+            </div>
+            <HealthMix health={s.health} />
+            <div className="row muted num" style={{ fontSize: 12, gap: 14 }}>
+              <span>Sprint progress <strong style={{ color: 'var(--text)' }}>{tp}%</strong></span>
+              <span>Overdue <strong style={{ color: 'var(--text)' }}>{s.overdue}</strong></span>
+              <span>Defects <strong style={{ color: 'var(--text)' }}>{s.openDefects}</strong></span>
+            </div>
+          </Link>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Tribe dashboard: health and progress of every project in one tribe, and what needs a decision. */
+export function TribePage() {
+  const params = useParams();
+  const navigate = useNavigate();
+  const holidays = useStore((s) => s.holidays);
+  const today = useToday();
+  const insights = useInsights();
   const [sort, setSort] = useState<SortKey>('health');
   const [showCompleted, setShowCompleted] = useState(false);
+  const tribe = TRIBES.find((t) => t === params.tribe);
+  if (!tribe) return <NotFound what="tribe" />;
 
-  const insights = useMemo(
-    () => projects.map((p) => projectInsight(p, sprints, items, holidays, today)),
-    [projects, sprints, items, holidays, today],
-  );
-  const scoped = insights.filter((i) => (!tribe || i.project.tribe === tribe) && (showCompleted || i.project.status === 'active'));
+  const inTribe = insights.filter((i) => i.project.tribe === tribe);
+  const scoped = inTribe.filter((i) => showCompleted || i.project.status === 'active');
+  const completedCount = inTribe.length - inTribe.filter((i) => i.project.status === 'active').length;
   const summary = summarize(scoped);
   const pct = summary.weightTotal ? Math.round((summary.weightDone / summary.weightTotal) * 100) : 0;
+  const ts = TRIBE_STYLE[tribe];
 
   const sorted = [...scoped].sort((a, b) => {
     if (sort === 'progress') return a.progressPct - a.timePct - (b.progressPct - b.timePct);
@@ -44,41 +90,24 @@ export function DashboardPage() {
   });
   const attention = scoped.filter((i) => i.risks.length && i.project.status === 'active').sort((a, b) => HEALTH_ORDER.indexOf(a.health) - HEALTH_ORDER.indexOf(b.health));
 
-  const setTribe = (t: Tribe | null) => {
-    const next = new URLSearchParams(params);
-    if (t) next.set('tribe', t);
-    else next.delete('tribe');
-    setParams(next, { replace: true });
-  };
-
   return (
     <>
-      <Topbar crumbs={tribe ? [{ label: 'Dashboard', to: '/dashboard' }, { label: `Tribe ${tribe}` }] : [{ label: 'Dashboard' }]} />
+      <Topbar crumbs={[{ label: 'Project Board', to: '/projects' }, { label: `Tribe ${tribe}` }]} />
       <div className="content">
         <div className="page">
           <div className="page-head">
-            <div className="col" style={{ gap: 6 }}>
-              <h1 className="page-title">{tribe ? `Tribe ${tribe}` : 'Dashboard'}</h1>
-              <p className="muted">
-                {tribe ? 'Progress and health of every project in this tribe.' : 'Progress and health across all tribes and running projects.'} Health compares
-                sprint progress with elapsed working time.
-              </p>
+            <div className="row" style={{ gap: 14 }}>
+              <div className="tile" style={{ background: ts.bg, color: ts.fg }}><Icon name="users" size={20} /></div>
+              <div className="col" style={{ gap: 4 }}>
+                <h1 className="page-title">Tribe {tribe}</h1>
+                <p className="muted">Projects in this tribe and how their sprints are going. Health compares sprint progress with elapsed working time.</p>
+              </div>
             </div>
-            <label className="check" style={{ fontSize: 13 }}>
-              <input type="checkbox" checked={showCompleted} onChange={(e) => setShowCompleted(e.target.checked)} /> Include completed projects
-            </label>
+            <label className="sr-only" htmlFor="tr-switch">Switch tribe</label>
+            <select id="tr-switch" className="filter-select" value={tribe} onChange={(e) => navigate(tribePath(e.target.value as Tribe))}>
+              {TRIBES.map((t) => <option key={t} value={t}>Tribe: {t}</option>)}
+            </select>
           </div>
-
-          <div className="seg" role="tablist" aria-label="Tribe" style={{ alignSelf: 'flex-start', flexWrap: 'wrap' }}>
-            <button type="button" role="tab" aria-selected={!tribe} onClick={() => setTribe(null)}>All tribes</button>
-            {TRIBES.map((t) => (
-              <button key={t} type="button" role="tab" aria-selected={tribe === t} onClick={() => setTribe(t)}>
-                <span style={{ width: 8, height: 8, borderRadius: 999, background: TRIBE_STYLE[t].fg }} />
-                {t}
-              </button>
-            ))}
-          </div>
-
           <div className="grid-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
             <StatTile icon="folder" label="Running projects" value={summary.projects} hint={`${summary.activeSprints} with an active sprint`} />
             <StatTile icon="kanban" label="Active sprint progress" value={`${pct}%`} hint={`${summary.tasksDone} of ${summary.tasksTotal} tasks · ${summary.weightDone}/${summary.weightTotal} weight`} />
@@ -98,48 +127,15 @@ export function DashboardPage() {
             <StatTile icon="bug" label="Open defects" value={summary.openDefects} hint={summary.criticalDefects ? `${summary.criticalDefects} critical` : 'none critical'} />
           </div>
 
-          {!tribe && (
-            <section className="col" style={{ gap: 12 }} aria-labelledby="db-tribes">
-              <h2 id="db-tribes" style={{ fontSize: 16, fontWeight: 600 }}>Tribes</h2>
-              <div className="grid-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
-                {TRIBES.map((t) => {
-                  const list = insights.filter((i) => i.project.tribe === t && i.project.status === 'active');
-                  const s = summarize(list);
-                  const tp = s.weightTotal ? Math.round((s.weightDone / s.weightTotal) * 100) : 0;
-                  return (
-                    <button
-                      key={t}
-                      type="button"
-                      className="card"
-                      onClick={() => setTribe(t)}
-                      style={{ padding: 16, textAlign: 'left', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 10 }}
-                      aria-label={`Open tribe ${t} dashboard`}
-                    >
-                      <div className="row">
-                        <TribeBadge tribe={t} />
-                        <span className="grow" />
-                        <Icon name="chevronRight" size={16} color="var(--text-muted)" />
-                      </div>
-                      <div className="row" style={{ alignItems: 'baseline', gap: 8 }}>
-                        <span className="num" style={{ fontSize: 24, fontWeight: 700 }}>{s.projects}</span>
-                        <span className="muted" style={{ fontSize: 13 }}>running project{s.projects === 1 ? '' : 's'} · {s.activeSprints} sprint{s.activeSprints === 1 ? '' : 's'} active</span>
-                      </div>
-                      <HealthMix health={s.health} />
-                      <div className="row muted num" style={{ fontSize: 12, gap: 14 }}>
-                        <span>Sprint progress <strong style={{ color: 'var(--text)' }}>{tp}%</strong></span>
-                        <span>Overdue <strong style={{ color: 'var(--text)' }}>{s.overdue}</strong></span>
-                        <span>Defects <strong style={{ color: 'var(--text)' }}>{s.openDefects}</strong></span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
-          )}
-
           <section className="col" style={{ gap: 12 }} aria-labelledby="db-projects">
             <div className="row wrap">
-              <h2 id="db-projects" style={{ fontSize: 16, fontWeight: 600 }}>Projects</h2>
+              <h2 id="db-projects" style={{ fontSize: 16, fontWeight: 600 }}>Projects in {tribe}</h2>
+              <span className="count-pill">{sorted.length}</span>
+              {completedCount > 0 && (
+                <label className="check" style={{ fontSize: 13, marginLeft: 8 }}>
+                  <input type="checkbox" checked={showCompleted} onChange={(e) => setShowCompleted(e.target.checked)} /> Show {completedCount} completed
+                </label>
+              )}
               <span className="grow" />
               <StatusLegend />
               <label className="sr-only" htmlFor="db-sort">Sort by</label>
@@ -151,7 +147,7 @@ export function DashboardPage() {
               </select>
             </div>
             {sorted.length === 0 ? (
-              <Empty icon="folder" title="No running projects here" />
+              <Empty icon="folder" title={`No running projects in ${tribe}`} />
             ) : (
               <div className="table-wrap" style={{ overflowX: 'auto' }}>
                 <table className="table">
@@ -188,9 +184,9 @@ export function DashboardPage() {
               attention.map((i, idx) => (
                 <div key={i.project.id} className="row wrap" style={{ padding: '12px 20px', borderTop: idx ? '1px solid var(--border-soft)' : undefined, gap: 12 }}>
                   <HealthBadge health={i.health} />
-                  <Link to={`/projects/${i.project.id}/dashboard`} style={{ fontWeight: 600, color: 'var(--text)' }}>{i.project.name}</Link>
+                  <Link to={`/projects/${i.project.id}`} style={{ fontWeight: 600, color: 'var(--text)' }}>{i.project.name}</Link>
                   <span className="muted grow" style={{ fontSize: 13 }}>{i.risks.join(' · ')}</span>
-                  <Link to={`/projects/${i.project.id}/dashboard`} className="btn btn-secondary btn-sm">Open</Link>
+                  <Link to={`/projects/${i.project.id}`} className="btn btn-secondary btn-sm">Open</Link>
                 </div>
               ))
             )}
@@ -237,8 +233,8 @@ function ProjectRow({ insight: i, today, holidays }: { insight: ProjectInsight; 
         <div className="row">
           <span className="nav-tile" style={{ background: t.bg, color: t.fg, width: 28, height: 28, fontSize: 10 }}>{i.project.code}</span>
           <div className="col" style={{ gap: 0 }}>
-            <Link to={`/projects/${i.project.id}/dashboard`} style={{ fontWeight: 600, color: 'var(--text)' }}>{i.project.name}</Link>
-            <span className="muted" style={{ fontSize: 12 }}>{i.project.tribe}</span>
+            <Link to={`/projects/${i.project.id}`} style={{ fontWeight: 600, color: 'var(--text)' }}>{i.project.name}</Link>
+            <span className="muted truncate" style={{ fontSize: 12 }}>{i.project.client}</span>
           </div>
         </div>
       </td>

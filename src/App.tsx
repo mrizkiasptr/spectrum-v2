@@ -1,14 +1,13 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from './components/AppShell';
-import { DashboardPage } from './pages/DashboardPage';
 import { ComingSoon, NotFound } from './pages/misc';
 import { HolidayCalendarPage, MyTasksPage } from './pages/OtherPages';
 import { ProjectBoardPage } from './pages/ProjectBoardPage';
+import { TribePage } from './pages/TribePage';
 import { BacklogTab } from './pages/project/BacklogTab';
 import { DashboardTab } from './pages/project/DashboardTab';
 import { DefectsTab } from './pages/project/DefectsTab';
 import { DocsTab } from './pages/project/DocsTab';
-import { OverviewTab } from './pages/project/OverviewTab';
 import { ProjectLayout } from './pages/project/ProjectLayout';
 import { ReleasesTab } from './pages/project/ReleasesTab';
 import { RetroTab } from './pages/project/RetroTab';
@@ -19,6 +18,7 @@ import { SprintLayout } from './pages/sprint/SprintLayout';
 import { SprintReport, SprintRetro, SprintReview, SprintTaskList } from './pages/sprint/SprintTabs';
 
 const LATER: [string, string][] = [
+  ['/home', 'Home'],
   ['/squad-health-check', 'Squad Health Check'],
   ['/change-requests', 'Change Request'],
   ['/work-performance', 'Work Performance'],
@@ -34,9 +34,8 @@ export default function App() {
     <Routes>
       <Route element={<AppShell />}>
         <Route index element={<Navigate to="/projects" replace />} />
-        <Route path="dashboard" element={<DashboardPage />} />
-        <Route path="home" element={<Navigate to="/dashboard" replace />} />
         <Route path="projects" element={<ProjectBoardPage />} />
+        <Route path="projects/tribe/:tribe" element={<TribePage />} />
         <Route path="projects/:projectId/sprints/:sprintId" element={<SprintLayout />}>
           <Route index element={<SprintBoard />} />
           <Route path="list" element={<SprintTaskList />} />
@@ -45,8 +44,8 @@ export default function App() {
           <Route path="retro" element={<SprintRetro />} />
         </Route>
         <Route path="projects/:projectId" element={<ProjectLayout />}>
-          <Route index element={<OverviewTab />} />
-          <Route path="dashboard" element={<DashboardTab />} />
+          <Route index element={<DashboardTab />} />
+          <Route path="dashboard" element={<Navigate to=".." replace />} />
           <Route path="backlog" element={<BacklogTab />} />
           <Route path="sprints" element={<SprintsTab />} />
           <Route path="releases" element={<ReleasesTab />} />

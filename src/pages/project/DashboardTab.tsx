@@ -1,17 +1,19 @@
 import { useMemo } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
-import { BarChart, HealthBadge, ProgressVsTime, StatTile } from '../../components/charts';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { BarChart, HealthBadge, ProgressVsTime, StatTile, StatusLegend, StatusMiniBar } from '../../components/charts';
 import { Icon } from '../../components/Icon';
-import { Avatar, ColumnIcon, Empty, ItemStatusBadge } from '../../components/ui';
+import { Avatar, ColumnIcon, Empty, ItemStatusBadge, OutcomeBadge, SprintStatusBadge } from '../../components/ui';
 import { fmtDue, fmtRange } from '../../domain/dates';
 import { projectInsight, workloadOf } from '../../domain/insights';
-import { progressOf, sprintDaysLabel, sprintName } from '../../domain/sprint';
+import { attentionFor, isSprintReady, progressOf, sprintDaysLabel, sprintName } from '../../domain/sprint';
+import type { Sprint } from '../../domain/types';
 import { columnOf } from '../../domain/workflow';
+import { tribePath } from '../TribePage';
 import { useToday } from '../../store/hooks';
 import { useStore } from '../../store/useStore';
 import { useProjectCtx } from './ProjectLayout';
 
-/** Project dashboard: health, delivery trend, where work sits, who carries it, and what is late. */
+/** Project landing page: health, the running sprint, every sprint in the project, delivery trend, workload, and what is late. */
 export function DashboardTab() {
   const { project } = useProjectCtx();
   const sprints = useStore((s) => s.sprints);
@@ -20,12 +22,19 @@ export function DashboardTab() {
   const holidays = useStore((s) => s.holidays);
   const today = useToday();
   const [, setParams] = useSearchParams();
+  const navigate = useNavigate();
 
   const insight = useMemo(() => projectInsight(project, sprints, items, holidays, today), [project, sprints, items, holidays, today]);
   const active = insight.activeSprint;
   const scope = useMemo(() => (active ? items.filter((i) => i.sprintId === active.id) : []), [items, active]);
   const workload = useMemo(() => workloadOf(scope, members), [scope, members]);
   const base = `/projects/${project.id}`;
+  const attention = useMemo(() => attentionFor(project, sprints, items, holidays, today), [project, sprints, items, holidays, today]);
+  const mine = items.filter((i) => i.projectId === project.id);
+  const backlog = mine.filter((i) => i.sprintId === null && i.status !== 'done');
+  const projectSprints = sprints
+    .filter((x) => x.projectId === project.id)
+    .sort((a, b) => STATUS_RANK[a.status] - STATUS_RANK[b.status] || (a.status === 'completed' ? b.number - a.number : a.number - b.number));
 
   const velocityData = [
     ...insight.velocity.map((v) => ({
@@ -43,43 +52,141 @@ export function DashboardTab() {
   return (
     <div className="page">
       <div className="row wrap" style={{ gap: 12 }}>
-        <h2 style={{ fontSize: 18, fontWeight: 700 }}>Project dashboard</h2>
+        <h2 style={{ fontSize: 18, fontWeight: 700 }}>Project health</h2>
         <HealthBadge health={insight.health} />
         {insight.risks.length > 0 && <span className="muted" style={{ fontSize: 13 }}>{insight.risks.join(' · ')}</span>}
         <span className="grow" />
-        <Link to={`/dashboard?tribe=${encodeURIComponent(project.tribe)}`} className="btn btn-secondary btn-md">
-          <Icon name="gauge" size={16} /> Tribe {project.tribe} dashboard
+        <Link to={tribePath(project.tribe)} className="btn btn-secondary btn-md">
+          <Icon name="users" size={16} /> Tribe {project.tribe}
         </Link>
       </div>
 
+      <div className="grid-3" style={{ gap: 20, alignItems: 'start' }}>
+        <section className="card" style={{ gridColumn: 'span 2' }} aria-labelledby="pd-sprint">
+          {active ? (
+            <>
+              <div className="card-head">
+                <div className="row">
+                  <h3 id="pd-sprint" className="card-title">{sprintName(active)}</h3>
+                  <SprintStatusBadge status="active" />
+                </div>
+                <span className="muted num" style={{ fontSize: 13 }}>
+                  {fmtRange(active.startDate, active.endDate)} · <strong style={{ color: 'var(--text)' }}>{sprintDaysLabel(active, today, holidays, project.countCollectiveLeave)}</strong>
+                </span>
+              </div>
+              <div className="card-body col" style={{ gap: 16 }}>
+                <div className="row" style={{ alignItems: 'flex-start', gap: 12 }}>
+                  <span className="tile" style={{ width: 32, height: 32, background: 'var(--primary-subtle)', color: 'var(--primary-darker)' }}>
+                    <Icon name="target" size={18} />
+                  </span>
+                  <div className="col" style={{ gap: 2 }}>
+                    <span className="muted" style={{ fontSize: 12, fontWeight: 500 }}>Sprint goal</span>
+                    <span style={{ fontSize: 16, fontWeight: 600, lineHeight: 1.45 }}>{active.goal || 'No sprint goal was set.'}</span>
+                  </div>
+                </div>
+                <ProgressVsTime progress={insight.progressPct} time={insight.timePct} />
+                <div className="row wrap" style={{ gap: 12 }}>
+                  <StatusMiniBar byStatus={insight.byStatus} width={180} />
+                  <span className="muted num" style={{ fontSize: 12 }}>{insight.progress.done}/{insight.progress.total} tasks · {insight.progress.doneWeight}/{insight.progress.totalWeight} weight</span>
+                  <span className="grow" />
+                  <Link to={`${base}/sprints/${active.id}/report`} className="btn btn-secondary btn-md">Report</Link>
+                  <Link to={`${base}/sprints/${active.id}`} className="btn btn-primary btn-md"><Icon name="kanban" size={16} /> Open board</Link>
+                </div>
+                <p className="muted" style={{ fontSize: 12 }}>
+                  The dark tick marks where progress should be if work kept pace with elapsed working days. Up to 10 pts behind is on track; more than 25 is off track.
+                </p>
+              </div>
+            </>
+          ) : (
+            <div className="card-body col" style={{ gap: 12, alignItems: 'flex-start' }}>
+              <h3 id="pd-sprint" className="card-title">No active sprint</h3>
+              <p className="muted">
+                {project.status === 'completed'
+                  ? 'This project is completed. Sprint history stays available below.'
+                  : projectSprints.some((x) => x.status === 'draft')
+                    ? 'A draft sprint is waiting. Add a goal, dates, and tasks, then start it.'
+                    : 'Plan the first sprint when the backlog has enough sprint-ready items.'}
+              </p>
+              {project.status === 'active' && (
+                <Link to={`${base}/sprints${projectSprints.some((x) => x.status === 'draft') ? '' : '?new=1'}`} className="btn btn-primary btn-md">
+                  {projectSprints.some((x) => x.status === 'draft') ? 'Go to draft sprint' : 'Plan a sprint'}
+                </Link>
+              )}
+            </div>
+          )}
+        </section>
+
+        <section className="card" aria-labelledby="pd-attn">
+          <div className="card-head">
+            <h3 id="pd-attn" className="card-title">Needs attention</h3>
+            <span className="count-pill">{attention.length}</span>
+          </div>
+          {attention.length === 0 ? (
+            <div className="card-body row muted">
+              <Icon name="checkCircle" color="var(--success)" /> All clear.
+            </div>
+          ) : (
+            attention.map((a, i) => (
+              <div key={a.id} className="row" style={{ alignItems: 'flex-start', gap: 12, padding: '14px 20px', borderTop: i ? '1px solid var(--border-soft)' : undefined }}>
+                <Icon
+                  name={a.tone === 'info' ? 'info' : 'alert'}
+                  size={18}
+                  color={a.tone === 'danger' ? 'var(--danger)' : a.tone === 'warning' ? 'var(--warning)' : 'var(--primary-darker)'}
+                  style={{ marginTop: 2 }}
+                />
+                <div className="col" style={{ gap: 4 }}>
+                  <strong style={{ fontWeight: 600 }}>{a.title}</strong>
+                  <span className="muted" style={{ fontSize: 13 }}>{a.body}</span>
+                  <Link to={a.action.to} style={{ fontSize: 13, fontWeight: 600 }}>{a.action.label}</Link>
+                </div>
+              </div>
+            ))
+          )}
+        </section>
+      </div>
+
       <div className="grid-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
-        <StatTile
-          icon="kanban"
-          label={active ? `${sprintName(active)} progress` : 'Active sprint'}
-          value={active ? `${insight.progressPct}%` : '—'}
-          hint={active ? `${insight.progress.doneWeight}/${insight.progress.totalWeight} weight · ${insight.progress.done}/${insight.progress.total} tasks` : 'No sprint running'}
-        />
-        <StatTile icon="clock" label="Sprint time elapsed" value={active ? `${insight.timePct}%` : '—'} hint={active ? sprintDaysLabel(active, today, holidays, project.countCollectiveLeave) : '—'} />
         <StatTile icon="chart" label="Avg. velocity" value={insight.avgVelocity ?? '—'} hint={insight.velocity.length ? `weight per sprint, last ${insight.velocity.length}` : 'no completed sprints yet'} />
         <StatTile icon="target" label="Sprint goals met" value={insight.goals.closed ? `${insight.goals.achieved}/${insight.goals.closed}` : '—'} hint="completed sprints" />
+        <StatTile icon="layers" label="Backlog" value={backlog.length} hint={`${backlog.filter(isSprintReady).length} sprint-ready`} />
         <StatTile icon="clock" label="Overdue tasks" value={insight.overdue.length} hint="in sprints, past due" />
         <StatTile icon="bug" label="Open defects" value={insight.openDefects} hint={insight.criticalDefects ? `${insight.criticalDefects} critical` : 'none critical'} />
       </div>
 
-      {active && (
-        <section className="card" aria-labelledby="pd-pace">
-          <div className="card-head">
-            <h3 id="pd-pace" className="card-title">{sprintName(active)} pace</h3>
-            <span className="muted num" style={{ fontSize: 13 }}>{fmtRange(active.startDate, active.endDate)}</span>
+      <section className="col" style={{ gap: 12 }} aria-labelledby="pd-sprints">
+        <div className="row wrap">
+          <h2 id="pd-sprints" style={{ fontSize: 16, fontWeight: 600 }}>Sprints</h2>
+          <span className="count-pill">{projectSprints.length}</span>
+          <span className="grow" />
+          <StatusLegend />
+          <Link to={`${base}/sprints`} className="btn btn-secondary btn-sm">Manage sprints</Link>
+        </div>
+        {projectSprints.length === 0 ? (
+          <Empty icon="refresh" title="No sprints yet">
+            <Link to={`${base}/sprints?new=1`} className="btn btn-primary btn-sm">Plan a sprint</Link>
+          </Empty>
+        ) : (
+          <div className="table-wrap" style={{ overflowX: 'auto' }}>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th scope="col" style={{ width: 200 }}>Sprint</th>
+                  <th scope="col" style={{ width: 180 }}>Dates</th>
+                  <th scope="col">Goal</th>
+                  <th scope="col" style={{ width: 160 }}>Tasks</th>
+                  <th scope="col" style={{ width: 100, textAlign: 'right' }}>Delivered</th>
+                  <th scope="col" style={{ width: 170 }}>Goal outcome</th>
+                </tr>
+              </thead>
+              <tbody>
+                {projectSprints.map((sp) => (
+                  <SprintRow key={sp.id} sprint={sp} scope={mine.filter((i) => i.sprintId === sp.id)} onOpen={() => navigate(`${base}/sprints/${sp.id}`)} />
+                ))}
+              </tbody>
+            </table>
           </div>
-          <div className="card-body col" style={{ gap: 10 }}>
-            <ProgressVsTime progress={insight.progressPct} time={insight.timePct} />
-            <p className="muted" style={{ fontSize: 12 }}>
-              The dark tick marks where progress would be if work kept pace with elapsed working days. Up to 10 pts behind is on track; more than 25 is off track.
-            </p>
-          </div>
-        </section>
-      )}
+        )}
+      </section>
 
       <div className="grid-2" style={{ alignItems: 'start' }}>
         <section className="card" aria-labelledby="pd-velocity">
@@ -191,5 +298,37 @@ export function DashboardTab() {
         )}
       </section>
     </div>
+  );
+}
+
+const STATUS_RANK: Record<Sprint['status'], number> = { active: 0, draft: 1, completed: 2 };
+
+function SprintRow({ sprint, scope, onOpen }: { sprint: Sprint; scope: ReturnType<typeof useStore.getState>['items']; onOpen: () => void }) {
+  const p = progressOf(scope);
+  const delivered = sprint.status === 'completed' ? sprint.closedSummary?.doneWeight ?? p.doneWeight : p.doneWeight;
+  const planned = sprint.status === 'completed' ? sprint.closedSummary?.totalWeight ?? p.totalWeight : p.totalWeight;
+  return (
+    <tr className="clickable" onClick={onOpen}>
+      <td>
+        <div className="row" style={{ gap: 8, whiteSpace: 'nowrap' }}>
+          <Link to={`/projects/${sprint.projectId}/sprints/${sprint.id}`} onClick={(e) => e.stopPropagation()} style={{ fontWeight: 600 }}>{sprintName(sprint)}</Link>
+          <SprintStatusBadge status={sprint.status} />
+        </div>
+      </td>
+      <td className="muted num" style={{ fontSize: 13, whiteSpace: 'nowrap' }}>{sprint.startDate && sprint.endDate ? fmtRange(sprint.startDate, sprint.endDate) : 'Not set'}</td>
+      <td><span className="truncate" style={{ display: 'block', maxWidth: 260, fontSize: 13 }} title={sprint.goal}>{sprint.goal || <span className="subtle">No goal yet</span>}</span></td>
+      <td>
+        {p.total ? (
+          <div className="col" style={{ gap: 4 }}>
+            <StatusMiniBar byStatus={p.byStatus} width={130} />
+            <span className="muted num" style={{ fontSize: 12 }}>{p.done}/{p.total} done</span>
+          </div>
+        ) : (
+          <span className="subtle">No tasks</span>
+        )}
+      </td>
+      <td className="num" style={{ textAlign: 'right' }}>{planned ? <><strong>{delivered}</strong><span className="muted">/{planned}</span></> : <span className="subtle">—</span>}</td>
+      <td>{sprint.goalOutcome ? <OutcomeBadge outcome={sprint.goalOutcome} /> : <span className="subtle">{sprint.status === 'completed' ? 'Not recorded' : '—'}</span>}</td>
+    </tr>
   );
 }

@@ -10,6 +10,7 @@ import { TRIBES } from '../domain/types';
 import { NewProjectDialog } from '../features/dialogs';
 import { useToday } from '../store/hooks';
 import { useStore } from '../store/useStore';
+import { TribeCards, useInsights } from './TribePage';
 
 type Group = 'all' | 'favorites' | 'mine';
 type StatusFilter = 'active' | 'completed' | 'all';
@@ -51,6 +52,7 @@ export function ProjectBoardPage() {
   const [tribe, setTribe] = usePref<Tribe | 'all'>('pb-tribe', 'all');
   const [view, setView] = usePref<'grid' | 'list'>('pb-view', 'grid');
   const [q, setQ] = useState('');
+  const insights = useInsights();
   const [creating, setCreating] = useState(false);
 
   const inGroup = (p: Project, g: Group) => (g === 'favorites' ? favorites.includes(p.id) : g === 'mine' ? p.memberIds.includes(me) : true);
@@ -80,13 +82,19 @@ export function ProjectBoardPage() {
           <div className="page-head">
             <div className="col" style={{ gap: 6 }}>
               <h1 className="page-title">Project Board</h1>
-              <p className="muted">Track the sprints of all your projects. Click a sprint to jump straight to its board.</p>
+              <p className="muted">Pick a tribe to see its dashboard, or a project to see its dashboard and sprints. Click a sprint to jump straight to its board.</p>
             </div>
             <button type="button" className="btn btn-primary" onClick={() => setCreating(true)}>
               <Icon name="plus" size={18} /> New project
             </button>
           </div>
 
+          <section className="col" style={{ gap: 12 }} aria-labelledby="pb-tribes">
+            <h2 id="pb-tribes" style={{ fontSize: 16, fontWeight: 600 }}>Tribes</h2>
+            <TribeCards insights={insights} />
+          </section>
+
+          <h2 style={{ fontSize: 16, fontWeight: 600, marginTop: 4 }}>Projects</h2>
           <div className="row wrap" style={{ gap: 10 }}>
             <div className="seg" role="tablist" aria-label="Project groups">
               {([['all', 'All'], ['favorites', 'Favorites'], ['mine', 'My projects']] as const).map(([k, label]) => (
