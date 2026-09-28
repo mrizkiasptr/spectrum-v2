@@ -1,4 +1,5 @@
 import { addDays } from './dates';
+import { defaultWorkflow } from './workflow';
 import type {
   Criterion,
   Doc,
@@ -72,6 +73,8 @@ interface ItemSpec {
   type: ItemType;
   title: string;
   status: ItemStatus;
+  /** Column id when it differs from the category's default column. */
+  column?: string;
   weight: number | null;
   assignee: string | null;
   description?: string;
@@ -98,13 +101,18 @@ export function createSeed(today: ISODate): SeedData {
       description: 'Project board for the SPE business analyst team.', tribe: 'Analyst', status: 'active',
       startDate: addDays(today, -32), endDate: '2030-12-27',
       memberIds: ['u-mr', 'u-am', 'u-ds', 'u-rp', 'u-hs', 'u-ag', 'u-lp', 'u-fn'],
-      defaultSprintDays: 14, countCollectiveLeave: true, createdAt: ts(addDays(today, -32)),
+      workflow: defaultWorkflow(), defaultSprintDays: 14, countCollectiveLeave: true, createdAt: ts(addDays(today, -32)),
     },
     {
       id: 'p-spe', key: 'SPE', code: 'SP', name: 'Spectrum', client: 'SPE · Internal',
       description: 'Scrum project management platform.', tribe: 'Phoenix', status: 'active',
       startDate: '2023-01-01', endDate: '2025-01-01',
       memberIds: ['u-mr', 'u-rp', 'u-fn', 'u-hs', 'u-lp'],
+      workflow: [
+        ...defaultWorkflow().slice(0, 3),
+        { id: 'qa', name: 'Ready for QA', category: 'review', color: '#7C3AED' },
+        ...defaultWorkflow().slice(3),
+      ],
       defaultSprintDays: 14, countCollectiveLeave: true, createdAt: ts('2023-01-01'),
     },
     {
@@ -112,28 +120,28 @@ export function createSeed(today: ISODate): SeedData {
       description: 'QRIS merchant acquiring for Mandiri Taspen.', tribe: 'Ursa Major', status: 'active',
       startDate: addDays(today, -77), endDate: '2030-07-13',
       memberIds: ['u-mr', 'u-fn', 'u-hs', 'u-lp'],
-      defaultSprintDays: 14, countCollectiveLeave: true, createdAt: ts(addDays(today, -77)),
+      workflow: defaultWorkflow(), defaultSprintDays: 14, countCollectiveLeave: true, createdAt: ts(addDays(today, -77)),
     },
     {
       id: 'p-kaltim', key: 'QKT', code: 'QK', name: 'QRISAN x Bank Kaltimtara', client: 'Bank Kaltimtara',
       description: 'QRIS merchant acquiring for Bank Kaltimtara.', tribe: 'Ursa Major', status: 'active',
       startDate: '2025-01-24', endDate: '2030-01-24',
       memberIds: ['u-hs', 'u-fn', 'u-lp', 'u-ds'],
-      defaultSprintDays: 14, countCollectiveLeave: true, createdAt: ts('2025-01-24'),
+      workflow: defaultWorkflow(), defaultSprintDays: 14, countCollectiveLeave: true, createdAt: ts('2025-01-24'),
     },
     {
       id: 'p-specva', key: 'SVA', code: 'SV', name: 'SPECVA', client: 'PO · Andy Mahendra Giriseno',
       description: 'A core virtual account engine that can be replicated within two months.', tribe: 'Andromeda',
       status: 'completed', startDate: '2023-01-24', endDate: '2023-04-30',
       memberIds: ['u-ag', 'u-fn', 'u-rp', 'u-lp'],
-      defaultSprintDays: 14, countCollectiveLeave: true, createdAt: ts('2023-01-24'),
+      workflow: defaultWorkflow(), defaultSprintDays: 14, countCollectiveLeave: true, createdAt: ts('2023-01-24'),
     },
     {
       id: 'p-snap', key: 'ASN', code: 'AS', name: 'Autopay SNAP', client: 'BNI WHS',
       description: 'SNAP-compliant autopay for BNI WHS.', tribe: 'Andromeda', status: 'completed',
       startDate: '2023-06-07', endDate: '2024-12-28',
       memberIds: ['u-mr', 'u-fn', 'u-lp'],
-      defaultSprintDays: 14, countCollectiveLeave: true, createdAt: ts('2023-06-07'),
+      workflow: defaultWorkflow(), defaultSprintDays: 14, countCollectiveLeave: true, createdAt: ts('2023-06-07'),
     },
   ];
 
@@ -212,6 +220,7 @@ export function createSeed(today: ISODate): SeedData {
       title: spec.title,
       description: spec.description ?? '',
       status: spec.status,
+      statusId: spec.column ?? spec.status,
       weight: spec.weight,
       assigneeId: spec.assignee,
       reviewerId: spec.reviewer ?? null,
@@ -270,7 +279,7 @@ export function createSeed(today: ISODate): SeedData {
     { key: 402, type: 'story', title: 'Project list with filters and favorites', status: 'done', weight: 5, assignee: 'u-fn', doneOffset: 2 },
     { key: 403, type: 'story', title: 'Sprint setup dialog with flexible length', status: 'done', weight: 5, assignee: 'u-fn', doneOffset: 4 },
     { key: 404, type: 'story', title: 'Holiday-aware working days', status: 'in_progress', weight: 5, assignee: 'u-fn' },
-    { key: 405, type: 'story', title: 'Sprint board drag and drop', status: 'review', weight: 8, assignee: 'u-fn', reviewer: 'u-lp' },
+    { key: 405, type: 'story', title: 'Sprint board drag and drop', status: 'review', column: 'qa', weight: 8, assignee: 'u-fn', reviewer: 'u-lp' },
     { key: 406, type: 'task', title: 'Usability test script for Project Board v2', status: 'in_progress', weight: 3, assignee: 'u-mr' },
     { key: 407, type: 'bug', title: 'Board loses scroll position after moving a card', status: 'todo', weight: 2, assignee: 'u-fn', severity: 'critical' },
     { key: 408, type: 'task', title: 'Burndown chart', status: 'todo', weight: 3, assignee: 'u-rp' },

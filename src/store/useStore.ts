@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import { addDays, diffDays, lengthInDays, todayISO } from '../domain/dates';
 import { createSeed, type SeedData } from '../domain/seed';
 import { nextSprintNumber, startBlocker, suggestPeriod } from '../domain/sprint';
+import { defaultWorkflow, findStatus, firstOfCategory, validateWorkflow } from '../domain/workflow';
 import type {
   Doc,
   GoalOutcome,
@@ -13,6 +14,7 @@ import type {
   RetroItem,
   RetroKind,
   Sprint,
+  WorkflowStatus,
   WorkItem,
 } from '../domain/types';
 
@@ -34,6 +36,8 @@ export interface NewItemInput {
   type: ItemType;
   sprintId: string | null;
   status?: ItemStatus;
+  /** Workflow column; takes precedence over status. */
+  statusId?: string;
   weight?: number | null;
   assigneeId?: string | null;
   severity?: WorkItem['severity'];
@@ -72,6 +76,12 @@ interface Actions {
   toggleVote: (retroId: string) => void;
   deleteRetro: (retroId: string) => void;
 
+  /** Workflow editing. Each returns an error message, or null on success. */
+  addStatus: (projectId: string, status: Omit<WorkflowStatus, 'id'>) => string | null;
+  updateStatus: (projectId: string, statusId: string, patch: Partial<Omit<WorkflowStatus, 'id'>>) => string | null;
+  deleteStatus: (projectId: string, statusId: string, moveToId: string) => string | null;
+  moveStatus: (projectId: string, statusId: string, toIndex: number) => void;
+
   addDoc: (projectId: string, title: string, url: string) => void;
   deleteDoc: (docId: string) => void;
 
@@ -95,6 +105,26 @@ function applyStatus(item: WorkItem, status: ItemStatus): WorkItem {
   if (status === item.status) return item;
   if (status === 'done') return { ...item, status, completedAt: new Date().toISOString() };
   return { ...item, status, completedAt: null, release: 'unreleased' };
+}
+
+/** Moves an item to a workflow column, updating its category accordingly. */
+function toColumn(item: WorkItem, column: WorkflowStatus): WorkItem {
+  return applyStatus({ ...item, statusId: column.id }, column.category);
+}
+
+function workflowOf(projects: Project[], projectId: string): WorkflowStatus[] {
+  return projects.find((p) => p.id === projectId)?.workflow ?? defaultWorkflow();
+}
+
+/** Upgrades persisted data from older app versions. */
+export function migrateState(persisted: unknown, version: number): Partial<SeedData> {
+  const st = { ...(persisted as Partial<SeedData>) };
+  if (version < 2) {
+    // v1 had four fixed statuses; give every project the default workflow and map items onto it.
+    st.projects = (st.projects ?? []).map((p) => ({ ...p, workflow: p.workflow ?? defaultWorkflow() }));
+    st.items = (st.items ?? []).map((i) => ({ ...i, statusId: i.statusId ?? i.status }));
+  }
+  return st;
 }
 
 export const useStore = create<State>()(
@@ -121,6 +151,7 @@ export const useStore = create<State>()(
           ...input,
           status: 'active',
           memberIds: [get().currentUserId],
+          workflow: defaultWorkflow(),
           defaultSprintDays: 14,
           countCollectiveLeave: true,
           createdAt: new Date().toISOString(),
@@ -228,7 +259,9 @@ export const useStore = create<State>()(
         const s = get();
         const project = s.projects.find((p) => p.id === projectId)!;
         const maxRank = s.items.filter((i) => i.projectId === projectId).reduce((m, i) => Math.max(m, i.rank), 0);
-        const status = input.status ?? 'todo';
+        const column =
+          (input.statusId && findStatus(project.workflow, input.statusId)) || firstOfCategory(project.workflow, input.status ?? 'todo');
+        const status = column.category;
         const item: WorkItem = {
           id: newId('i'),
           projectId,
@@ -237,6 +270,7 @@ export const useStore = create<State>()(
           title: input.title.trim(),
           description: input.description ?? '',
           status,
+          statusId: column.id,
           weight: input.weight ?? null,
           assigneeId: input.assigneeId ?? null,
           reviewerId: null,
@@ -260,9 +294,15 @@ export const useStore = create<State>()(
         set((s) => ({
           items: s.items.map((i) => {
             if (i.id !== itemId) return i;
-            const { status, ...rest } = patch;
+            const { status, statusId, ...rest } = patch;
             const next = { ...i, ...rest };
-            return status ? applyStatus(next, status) : next;
+            const workflow = workflowOf(s.projects, i.projectId);
+            if (statusId) {
+              const column = findStatus(workflow, statusId);
+              return column ? toColumn(next, column) : next;
+            }
+            if (status && status !== i.status) return toColumn(next, firstOfCategory(workflow, status));
+            return next;
           }),
         })),
 
@@ -341,6 +381,61 @@ export const useStore = create<State>()(
 
       deleteRetro: (retroId) => set((s) => ({ retro: s.retro.filter((r) => r.id !== retroId) })),
 
+      addStatus: (projectId, status) => {
+        const workflow = workflowOf(get().projects, projectId);
+        const column: WorkflowStatus = { ...status, name: status.name.trim(), id: newId('st') };
+        // New columns land before the first Done column unless they are Done themselves.
+        const doneAt = workflow.findIndex((w) => w.category === 'done');
+        const at = column.category === 'done' || doneAt < 0 ? workflow.length : doneAt;
+        const next = [...workflow.slice(0, at), column, ...workflow.slice(at)];
+        const error = validateWorkflow(next);
+        if (error) return error;
+        get().updateProject(projectId, { workflow: next });
+        return null;
+      },
+
+      updateStatus: (projectId, statusId, patch) => {
+        const workflow = workflowOf(get().projects, projectId);
+        const current = findStatus(workflow, statusId);
+        if (!current) return 'Status not found.';
+        const updated = { ...current, ...patch, name: (patch.name ?? current.name).trim() };
+        const next = workflow.map((w) => (w.id === statusId ? updated : w));
+        const error = validateWorkflow(next);
+        if (error) return error;
+        set((s) => ({
+          projects: s.projects.map((p) => (p.id === projectId ? { ...p, workflow: next } : p)),
+          items:
+            updated.category === current.category
+              ? s.items
+              : s.items.map((i) => (i.projectId === projectId && i.statusId === statusId ? toColumn(i, updated) : i)),
+        }));
+        return null;
+      },
+
+      deleteStatus: (projectId, statusId, moveToId) => {
+        const workflow = workflowOf(get().projects, projectId);
+        const target = findStatus(workflow, moveToId);
+        if (!target || moveToId === statusId) return 'Choose another status for its tasks.';
+        const next = workflow.filter((w) => w.id !== statusId);
+        const error = validateWorkflow(next);
+        if (error) return error;
+        set((s) => ({
+          projects: s.projects.map((p) => (p.id === projectId ? { ...p, workflow: next } : p)),
+          items: s.items.map((i) => (i.projectId === projectId && i.statusId === statusId ? toColumn(i, target) : i)),
+        }));
+        return null;
+      },
+
+      moveStatus: (projectId, statusId, toIndex) => {
+        const workflow = workflowOf(get().projects, projectId);
+        const from = workflow.findIndex((w) => w.id === statusId);
+        if (from < 0 || toIndex < 0 || toIndex >= workflow.length || from === toIndex) return;
+        const next = [...workflow];
+        const [moved] = next.splice(from, 1);
+        next.splice(toIndex, 0, moved);
+        get().updateProject(projectId, { workflow: next });
+      },
+
       addDoc: (projectId, title, url) =>
         set((s) => ({
           docs: [
@@ -358,7 +453,8 @@ export const useStore = create<State>()(
     }),
     {
       name: 'spectrum-v2',
-      version: 1,
+      version: 2,
+      migrate: (persisted, version) => migrateState(persisted, version) as State,
       partialize: (s) => ({
         currentUserId: s.currentUserId,
         members: s.members,

@@ -2,11 +2,12 @@ import { useEffect, useState, type CSSProperties } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Icon } from '../components/Icon';
 import { toast } from '../components/toast';
-import { Avatar, Drawer, MenuButton, StatusIcon } from '../components/ui';
+import { Avatar, ColumnIcon, Drawer, MenuButton } from '../components/ui';
 import { fmtDateTime, fmtDue, fmtRange } from '../domain/dates';
 import { sprintName } from '../domain/sprint';
-import type { ItemStatus, ItemType, Severity, WorkItem } from '../domain/types';
-import { STATUS_LABEL, STATUS_ORDER, TYPE_LABEL, WEIGHTS } from '../domain/types';
+import type { ItemType, Severity, WorkItem } from '../domain/types';
+import { columnOf, defaultWorkflow } from '../domain/workflow';
+import { TYPE_LABEL, WEIGHTS } from '../domain/types';
 import { useProjectMembers, useProjectSprints, useToday } from '../store/hooks';
 import { newId, useStore } from '../store/useStore';
 
@@ -47,6 +48,8 @@ function TaskDetail({ item, onClose }: { item: WorkItem; onClose: () => void }) 
   useEffect(() => setDesc(item.description), [item.description]);
 
   const sprint = sprints.find((s) => s.id === item.sprintId) ?? null;
+  const workflow = useStore((s) => s.projects.find((p) => p.id === item.projectId)?.workflow) ?? defaultWorkflow();
+  const column = columnOf(workflow, item);
   const openSprints = sprints.filter((s) => s.status !== 'completed');
   const member = (id: string | null) => allMembers.find((m) => m.id === id) ?? null;
   const critDone = item.criteria.filter((c) => c.done).length;
@@ -121,9 +124,9 @@ function TaskDetail({ item, onClose }: { item: WorkItem; onClose: () => void }) 
           <div className="row wrap">
             <label className="sr-only" htmlFor="td-status">Status</label>
             <div className="row" style={{ position: 'relative' }}>
-              <span style={{ position: 'absolute', left: 10, display: 'flex', pointerEvents: 'none' }}><StatusIcon status={item.status} size={14} /></span>
-              <select id="td-status" className="filter-select" style={{ paddingLeft: 30, height: 32, borderRadius: 999 }} value={item.status} onChange={(e) => set({ status: e.target.value as ItemStatus })}>
-                {STATUS_ORDER.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
+              <span style={{ position: 'absolute', left: 10, display: 'flex', pointerEvents: 'none' }}><ColumnIcon column={column} size={14} /></span>
+              <select id="td-status" className="filter-select" style={{ paddingLeft: 30, height: 32, borderRadius: 999 }} value={column.id} onChange={(e) => set({ statusId: e.target.value })}>
+                {workflow.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
               </select>
             </div>
             <label className="sr-only" htmlFor="td-type">Type</label>
@@ -331,7 +334,7 @@ function TaskDetail({ item, onClose }: { item: WorkItem; onClose: () => void }) 
             <ul className="muted" style={{ fontSize: 13, margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 6 }}>
               <li>Created {fmtDateTime(item.createdAt)}</li>
               {item.completedAt && <li>Marked done {fmtDateTime(item.completedAt)}</li>}
-              <li>Currently {STATUS_LABEL[item.status].toLowerCase()}{sprint ? ` in ${sprintName(sprint)}` : ' in the backlog'}</li>
+              <li>Currently in {column.name}{sprint ? ` · ${sprintName(sprint)}` : ' · backlog'}</li>
             </ul>
           )}
         </section>

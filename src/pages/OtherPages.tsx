@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { Topbar } from '../components/AppShell';
 import { Icon } from '../components/Icon';
 import { toast } from '../components/toast';
-import { Empty, StatusBadge, TypeBadge } from '../components/ui';
+import { Empty, ItemStatusBadge, TypeBadge } from '../components/ui';
 import { fmtDayDate, fmtDue, isWeekend } from '../domain/dates';
 import { sprintName } from '../domain/sprint';
 import type { HolidayKind } from '../domain/types';
@@ -201,7 +201,7 @@ export function MyTasksPage() {
                           </div>
                         </td>
                         <td><Link to={`/projects/${p.id}/sprints/${s.id}`}>{p.name} · {sprintName(s)}</Link></td>
-                        <td><StatusBadge status={i.status} /></td>
+                        <td><ItemStatusBadge item={i} /></td>
                         <td>{due ? <span className={`chip-date ${due.tone === 'neutral' ? '' : due.tone}`}>{due.label}</span> : <span className="subtle">—</span>}</td>
                       </tr>
                     );

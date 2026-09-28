@@ -27,7 +27,8 @@ npm run build
 | **Project › Backlog** | Ordered product backlog, inline weight estimate, sprint-readiness (weight + acceptance criteria), bulk add to a sprint with undo. |
 | **Project › Sprints** | Active / Planned / Completed groups. Create, set up, start, edit, complete, and delete draft sprints. |
 | **Sprint setup** | Required sprint goal, flexible length (1–4 weeks or custom dates), overlap check, >1 month warning, holiday-aware working days, save length as project default. |
-| **Sprint › Board** | Drag and drop between Not started / In progress / In review / Done (plus a keyboard-friendly card menu), only-my-tasks, type filter, add task per column, undo. |
+| **Sprint › Board** | Columns come from the project workflow. Drag and drop between them (plus a keyboard-friendly card menu), only-my-tasks, type filter, add task per column, undo. **Edit columns** opens the workflow editor. |
+| **Workflow (board columns)** | Per project, in Settings › Board columns or from the board: add, rename, recolor, reorder (drag or arrows), set what each column *counts as*, delete (tasks move to a column you pick). |
 | **Sprint › Task list / Report / Review / Retro** | Sortable table, burndown with ideal line, per-person delivery, increment vs not done, review notes, sprint retro. |
 | **Complete sprint** | Record the goal outcome (Achieved / Partially / Not achieved), carry open work to the next sprint or back to the backlog, review notes. |
 | **Task drawer** (`?task=<id>` on any page) | Edit status, type, severity, assignee, reviewer, due date, weight, sprint, epic, description, acceptance criteria, attachments, comments. Deep-linkable. |
@@ -46,6 +47,7 @@ Other sidebar modules (Squad Health Check, Work Performance, …) show a placeho
 - **Working days** exclude weekends, public holidays, and (per project setting) collective leave from the Holiday calendar.
 - **Goal outcome** is recorded only when the sprint is completed, so an active sprint is never shown as "Not achieved".
 - Backlog items are **sprint-ready** when they have a weight and at least one acceptance criterion.
+- **Workflow columns are flexible.** Each column has a name, color, and a category (*counts as* Not started, In progress, In review, or Done). Progress, burndown, due-date warnings, and releases use the category, so custom columns like "Ready for QA" still count correctly. A workflow needs at least two columns and at least one Done column; column names are unique. New columns are inserted before Done. New tasks land in the first *Not started* column.
 
 ## Code map
 

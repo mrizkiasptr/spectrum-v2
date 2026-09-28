@@ -5,7 +5,7 @@ import { toast } from '../components/toast';
 import { Dialog, StatusIcon } from '../components/ui';
 import { addDays, todayISO } from '../domain/dates';
 import { nextSprintNumber, progressOf, sprintName } from '../domain/sprint';
-import type { GoalOutcome, ItemStatus, ItemType, Severity, Sprint } from '../domain/types';
+import type { GoalOutcome, ItemType, Severity, Sprint } from '../domain/types';
 import { OUTCOME_LABEL, TRIBES, TYPE_LABEL, WEIGHTS } from '../domain/types';
 import { useProjectMembers } from '../store/hooks';
 import { useStore } from '../store/useStore';
@@ -247,18 +247,19 @@ export function NewItemDialog({
   projectId,
   sprintId,
   defaultType = 'story',
-  status,
+  statusId,
   onClose,
 }: {
   projectId: string;
   sprintId: string | null;
   defaultType?: ItemType;
-  status?: ItemStatus;
+  statusId?: string;
   onClose: () => void;
 }) {
   const create = useStore((s) => s.createItem);
   const sprint = useStore((s) => s.sprints.find((sp) => sp.id === sprintId) ?? null);
   const members = useProjectMembers(projectId);
+  const column = useStore((s) => s.projects.find((p) => p.id === projectId)?.workflow.find((w) => w.id === statusId));
   const [title, setTitle] = useState('');
   const [type, setType] = useState<ItemType>(defaultType);
   const [weight, setWeight] = useState<number | null>(null);
@@ -268,7 +269,7 @@ export function NewItemDialog({
 
   const submit = () => {
     if (!title.trim()) return;
-    const item = create(projectId, { title, type, sprintId, weight, assigneeId, severity, status });
+    const item = create(projectId, { title, type, sprintId, weight, assigneeId, severity, statusId });
     toast(`${item.key} added to ${sprint ? sprintName(sprint) : 'the backlog'}.`);
     if (another) {
       setTitle('');
@@ -281,7 +282,7 @@ export function NewItemDialog({
       open
       onClose={onClose}
       title={type === 'bug' && !sprintId ? 'Report a defect' : 'Add task'}
-      subtitle={sprint ? `To ${sprintName(sprint)}` : 'To the product backlog'}
+      subtitle={sprint ? `To ${sprintName(sprint)}${column ? ` · ${column.name}` : ''}` : 'To the product backlog'}
       footer={
         <>
           <label className="check grow" style={{ fontSize: 13 }}>

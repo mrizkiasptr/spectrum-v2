@@ -7,6 +7,7 @@ import { SPRINT_LENGTH_PRESETS } from '../../domain/sprint';
 import type { Tribe } from '../../domain/types';
 import { TRIBES } from '../../domain/types';
 import { useStore } from '../../store/useStore';
+import { WorkflowEditor } from '../../features/WorkflowEditor';
 import { useProjectCtx } from './ProjectLayout';
 
 export function SettingsTab() {
@@ -26,7 +27,7 @@ export function SettingsTab() {
   const [invite, setInvite] = useState('');
 
   useEffect(() => {
-    if (location.hash === '#members') document.getElementById('members')?.scrollIntoView({ behavior: 'smooth' });
+    if (location.hash) document.getElementById(location.hash.slice(1))?.scrollIntoView({ behavior: 'smooth' });
   }, [location.hash]);
 
   const dirty =
@@ -134,6 +135,16 @@ export function SettingsTab() {
               <span className="muted" style={{ fontSize: 13 }}>Turn off for teams that stay on duty during collective leave (for example, critical payment services).</span>
             </span>
           </label>
+        </div>
+      </section>
+
+      <section className="card" id="workflow" aria-labelledby="st-workflow">
+        <div className="card-head">
+          <h2 id="st-workflow" className="card-title">Board columns</h2>
+          <span className="count-pill">{project.workflow.length}</span>
+        </div>
+        <div className="card-body">
+          <WorkflowEditor project={project} />
         </div>
       </section>
 

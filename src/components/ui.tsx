@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import type { GoalOutcome, ItemStatus, ItemType, Member, Severity, SprintStatus, Tribe } from '../domain/types';
+import type { GoalOutcome, ItemStatus, ItemType, Member, Severity, SprintStatus, Tribe, WorkflowStatus, WorkItem } from '../domain/types';
+import { columnOf, defaultWorkflow } from '../domain/workflow';
 import { OUTCOME_LABEL, STATUS_LABEL, TYPE_LABEL } from '../domain/types';
 import { useStore } from '../store/useStore';
 import { Icon } from './Icon';
@@ -42,8 +43,8 @@ const STATUS_COLOR: Record<ItemStatus, string> = {
 };
 
 /** Circle status glyph: dashed = not started, half = in progress, dot = in review, filled check = done. */
-export function StatusIcon({ status, size = 16 }: { status: ItemStatus; size?: number }) {
-  const c = STATUS_COLOR[status];
+export function StatusIcon({ status, size = 16, color }: { status: ItemStatus; size?: number; color?: string }) {
+  const c = color ?? STATUS_COLOR[status];
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" style={{ flexShrink: 0 }}>
       {status === 'done' ? (
@@ -63,6 +64,23 @@ export function StatusIcon({ status, size = 16 }: { status: ItemStatus; size?: n
 }
 
 const STATUS_TONE: Record<ItemStatus, string> = { todo: '', in_progress: 'info', review: 'warning', done: 'success' };
+
+/** Glyph for a workflow column: the shape shows its category, the color is the team's choice. */
+export function ColumnIcon({ column, size = 16 }: { column: WorkflowStatus; size?: number }) {
+  return <StatusIcon status={column.category} color={column.color} size={size} />;
+}
+
+/** Badge showing the item's workflow column name (words stay dark for contrast; the icon carries the color). */
+export function ItemStatusBadge({ item }: { item: Pick<WorkItem, 'projectId' | 'status' | 'statusId'> }) {
+  const workflow = useStore((s) => s.projects.find((p) => p.id === item.projectId)?.workflow) ?? defaultWorkflow();
+  const column = columnOf(workflow, item);
+  return (
+    <span className="badge" style={{ borderColor: `${column.color}55`, background: `${column.color}0F`, color: 'var(--text-2)' }}>
+      <ColumnIcon column={column} size={12} />
+      {column.name}
+    </span>
+  );
+}
 
 export function StatusBadge({ status }: { status: ItemStatus }) {
   return (

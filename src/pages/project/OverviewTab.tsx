@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Icon, type IconName } from '../../components/Icon';
-import { StatusBadge, SprintStatusBadge } from '../../components/ui';
+import { ItemStatusBadge, SprintStatusBadge } from '../../components/ui';
 import { fmtDue, fmtRange } from '../../domain/dates';
 import { attentionFor, isSprintReady, progressOf, sprintDaysLabel, sprintName } from '../../domain/sprint';
 import { STATUS_ORDER } from '../../domain/types';
@@ -204,7 +204,7 @@ export function OverviewTab() {
                         <td>
                           <button type="button" className="task-card-title" onClick={() => setParams({ task: i.id })}>{i.title}</button>
                         </td>
-                        <td><StatusBadge status={i.status} /></td>
+                        <td><ItemStatusBadge item={i} /></td>
                         <td className="num">{i.weight ?? '—'}</td>
                         <td>{due ? <span className={`chip-date ${due.tone === 'neutral' ? '' : due.tone}`}>{due.label}</span> : <span className="subtle">—</span>}</td>
                       </tr>

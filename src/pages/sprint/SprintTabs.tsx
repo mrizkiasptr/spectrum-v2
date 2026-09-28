@@ -2,11 +2,11 @@ import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Icon } from '../../components/Icon';
 import { toast } from '../../components/toast';
-import { Avatar, Empty, OutcomeBadge, StatusBadge, TypeBadge } from '../../components/ui';
+import { Avatar, Empty, OutcomeBadge, ItemStatusBadge, TypeBadge } from '../../components/ui';
 import { diffDays, fmtDate, fmtDue } from '../../domain/dates';
 import { burndown, progressOf, sprintName } from '../../domain/sprint';
 import type { WorkItem } from '../../domain/types';
-import { STATUS_ORDER } from '../../domain/types';
+import { statusIndex } from '../../domain/workflow';
 import { RetroBoard } from '../../features/RetroBoard';
 import { useToday } from '../../store/hooks';
 import { useStore } from '../../store/useStore';
@@ -23,6 +23,8 @@ function useSprintItems() {
 type SortKey = 'key' | 'status' | 'weight' | 'due' | 'assignee';
 
 export function SprintTaskList() {
+  const { project } = useSprintCtx();
+  const workflow = project.workflow;
   const items = useSprintItems();
   const members = useStore((s) => s.members);
   const today = useToday();
@@ -33,7 +35,7 @@ export function SprintTaskList() {
     const name = (i: WorkItem) => members.find((m) => m.id === i.assigneeId)?.name ?? '~';
     const v: Record<SortKey, (i: WorkItem) => string | number> = {
       key: (i) => Number(i.key.split('-').pop()),
-      status: (i) => STATUS_ORDER.indexOf(i.status),
+      status: (i) => statusIndex(workflow, i),
       weight: (i) => i.weight ?? -1,
       due: (i) => i.dueDate ?? '9999',
       assignee: name,
@@ -86,7 +88,7 @@ export function SprintTaskList() {
                       <button type="button" className="task-card-title truncate" onClick={() => setParams({ task: i.id })}>{i.title}</button>
                     </div>
                   </td>
-                  <td><StatusBadge status={i.status} /></td>
+                  <td><ItemStatusBadge item={i} /></td>
                   <td className="num">{i.weight ?? <span style={{ color: 'var(--warning-text)' }}>—</span>}</td>
                   <td><span className="row"><Avatar member={m} /> <span className="truncate">{m?.name ?? 'Unassigned'}</span></span></td>
                   <td>{due ? <span className={`chip-date ${due.tone === 'neutral' ? '' : due.tone}`}>{due.label}</span> : <span className="subtle">—</span>}</td>
@@ -238,7 +240,7 @@ export function SprintReview() {
         <li key={i.id} className="row" style={{ padding: '10px 16px', borderTop: idx ? '1px solid var(--border-soft)' : undefined, fontSize: 13 }}>
           <span className="muted num" style={{ width: 80 }}>{i.key}</span>
           <button type="button" className="task-card-title truncate grow" style={{ fontSize: 13 }} onClick={() => setParams({ task: i.id })}>{i.title}</button>
-          <StatusBadge status={i.status} />
+          <ItemStatusBadge item={i} />
         </li>
       ))}
     </ul>

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Icon } from '../../components/Icon';
-import { Avatar, Empty, SeverityBadge, StatusBadge } from '../../components/ui';
+import { Avatar, Empty, SeverityBadge, ItemStatusBadge } from '../../components/ui';
 import { fmtDate } from '../../domain/dates';
 import { sprintName } from '../../domain/sprint';
 import type { Severity } from '../../domain/types';
@@ -88,7 +88,7 @@ export function DefectsTab() {
                       </div>
                     </td>
                     <td>{b.severity && <SeverityBadge severity={b.severity} />}</td>
-                    <td><StatusBadge status={b.status} /></td>
+                    <td><ItemStatusBadge item={b} /></td>
                     <td>
                       {s ? (
                         sprintName(s)

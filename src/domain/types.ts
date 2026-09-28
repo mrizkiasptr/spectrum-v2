@@ -13,6 +13,34 @@ export interface Member {
 
 export type ProjectStatus = 'active' | 'completed';
 
+/**
+ * A board column. Teams name, color, order, and add columns freely; the category
+ * tells the system what the column means for progress, burndown, and releases.
+ */
+export interface WorkflowStatus {
+  id: string;
+  name: string;
+  category: ItemStatus;
+  color: string;
+}
+
+export const STATUS_COLORS: { name: string; value: string }[] = [
+  { name: 'Gray', value: '#6B7280' },
+  { name: 'Blue', value: '#0779E4' },
+  { name: 'Orange', value: '#DC6803' },
+  { name: 'Purple', value: '#7C3AED' },
+  { name: 'Teal', value: '#0D9488' },
+  { name: 'Pink', value: '#DB2777' },
+  { name: 'Green', value: '#1E9E5A' },
+];
+
+export const DEFAULT_WORKFLOW: WorkflowStatus[] = [
+  { id: 'todo', name: 'Not started', category: 'todo', color: '#6B7280' },
+  { id: 'in_progress', name: 'In progress', category: 'in_progress', color: '#0779E4' },
+  { id: 'review', name: 'In review', category: 'review', color: '#DC6803' },
+  { id: 'done', name: 'Done', category: 'done', color: '#1E9E5A' },
+];
+
 export interface Project {
   id: string;
   /** Prefix for work item keys, e.g. "ANL" → ANL-118. */
@@ -27,6 +55,8 @@ export interface Project {
   startDate: ISODate;
   endDate: ISODate;
   memberIds: string[];
+  /** Board columns in display order. */
+  workflow: WorkflowStatus[];
   /** Default length for new sprints, in calendar days. */
   defaultSprintDays: number;
   /** Whether collective leave (cuti bersama) is excluded from working days. */
@@ -80,7 +110,10 @@ export interface WorkItem {
   type: ItemType;
   title: string;
   description: string;
+  /** Category of the current column; drives progress, burndown, and releases. */
   status: ItemStatus;
+  /** The project workflow column the item sits in. */
+  statusId: string;
   weight: number | null;
   assigneeId: string | null;
   reviewerId: string | null;
@@ -132,6 +165,7 @@ export interface Holiday {
   kind: HolidayKind;
 }
 
+/** Labels for status categories (what a column counts as). */
 export const STATUS_LABEL: Record<ItemStatus, string> = {
   todo: 'Not started',
   in_progress: 'In progress',

@@ -2,11 +2,12 @@ import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Icon } from '../../components/Icon';
 import { toast } from '../../components/toast';
-import { Avatar, MenuButton, SeverityBadge, StatusIcon, TypeBadge } from '../../components/ui';
+import { Avatar, ColumnIcon, MenuButton, SeverityBadge, TypeBadge } from '../../components/ui';
 import { fmtDue } from '../../domain/dates';
-import type { ItemStatus, ItemType, WorkItem } from '../../domain/types';
-import { STATUS_LABEL, STATUS_ORDER } from '../../domain/types';
+import type { ItemType, WorkflowStatus, WorkItem } from '../../domain/types';
+import { columnOf, firstOfCategory } from '../../domain/workflow';
 import { NewItemDialog } from '../../features/dialogs';
+import { WorkflowDialog } from '../../features/WorkflowEditor';
 import { useToday } from '../../store/hooks';
 import { useStore } from '../../store/useStore';
 import { useSprintCtx } from './SprintLayout';
@@ -19,14 +20,17 @@ export function SprintBoard() {
   const members = useStore((s) => s.members);
   const me = useStore((s) => s.currentUserId);
   const updateItem = useStore((s) => s.updateItem);
+  const moveStatus = useStore((s) => s.moveStatus);
+  const workflow = project.workflow;
   const today = useToday();
   const [params, setParams] = useSearchParams();
   const mine = params.get('mine') === '1';
   const [q, setQ] = useState('');
   const [type, setType] = useState<ItemType | 'all'>('all');
   const [dragId, setDragId] = useState<string | null>(null);
-  const [over, setOver] = useState<ItemStatus | null>(null);
-  const [addTo, setAddTo] = useState<ItemStatus | null>(null);
+  const [over, setOver] = useState<string | null>(null);
+  const [addTo, setAddTo] = useState<string | null>(null);
+  const [editingColumns, setEditingColumns] = useState(false);
   const [showAllDone, setShowAllDone] = useState(false);
   const readOnly = sprint.status === 'completed';
 
@@ -47,11 +51,11 @@ export function SprintBoard() {
     setParams(next, { replace: true });
   };
 
-  const move = (item: WorkItem, status: ItemStatus) => {
-    if (item.status === status) return;
-    const prev = item.status;
-    updateItem(item.id, { status });
-    toast(`${item.key} moved to ${STATUS_LABEL[status]}.`, { label: 'Undo', run: () => updateItem(item.id, { status: prev }) });
+  const move = (item: WorkItem, column: WorkflowStatus) => {
+    const prev = columnOf(workflow, item);
+    if (prev.id === column.id) return;
+    updateItem(item.id, { statusId: column.id });
+    toast(`${item.key} moved to ${column.name}.`, { label: 'Undo', run: () => updateItem(item.id, { statusId: prev.id }) });
   };
 
   const openTask = (id: string) => {
@@ -86,28 +90,33 @@ export function SprintBoard() {
         <span className="grow" />
         {!readOnly && (
           <>
-            <span className="muted" style={{ fontSize: 12 }}>Drag cards to change status, or use the card menu.</span>
-            <button type="button" className="btn btn-primary btn-md" onClick={() => setAddTo('todo')}>
+            <button type="button" className="btn btn-secondary btn-md" onClick={() => setEditingColumns(true)}>
+              <Icon name="sliders" size={16} /> Edit columns
+            </button>
+            <button type="button" className="btn btn-primary btn-md" onClick={() => setAddTo(firstOfCategory(workflow, 'todo').id)}>
               <Icon name="plus" size={16} /> Add task
             </button>
           </>
         )}
       </div>
 
-      <div className="board" style={{ overflowX: 'auto' }}>
-        {STATUS_ORDER.map((status) => {
-          const col = items.filter((i) => i.status === status).sort((a, b) => (a.completedAt ?? '').localeCompare(b.completedAt ?? '') * -1 || a.rank - b.rank);
-          const limited = status === 'done' && !showAllDone ? col.slice(0, DONE_PREVIEW) : col;
+      <div className="board" style={{ overflowX: 'auto', gridTemplateColumns: `repeat(${workflow.length}, minmax(260px, 1fr))` }}>
+        {workflow.map((column, colIdx) => {
+          const isDone = column.category === 'done';
+          const col = items
+            .filter((i) => columnOf(workflow, i).id === column.id)
+            .sort((a, b) => (a.completedAt ?? '').localeCompare(b.completedAt ?? '') * -1 || a.rank - b.rank);
+          const limited = isDone && !showAllDone ? col.slice(0, DONE_PREVIEW) : col;
           return (
             <section
-              key={status}
-              className={`column ${over === status ? 'drop' : ''}`}
-              aria-labelledby={`col-${status}`}
+              key={column.id}
+              className={`column ${over === column.id ? 'drop' : ''}`}
+              aria-labelledby={`col-${column.id}`}
               onDragOver={(e) => {
                 if (readOnly) return;
                 e.preventDefault();
                 e.dataTransfer.dropEffect = 'move';
-                if (over !== status) setOver(status);
+                if (over !== column.id) setOver(column.id);
               }}
               onDragLeave={(e) => {
                 if (!e.currentTarget.contains(e.relatedTarget as Node)) setOver(null);
@@ -116,20 +125,37 @@ export function SprintBoard() {
                 e.preventDefault();
                 const id = e.dataTransfer.getData('text/plain') || dragId;
                 const item = allItems.find((i) => i.id === id);
-                if (item) move(item, status);
+                if (item) move(item, column);
                 setDragId(null);
                 setOver(null);
               }}
             >
-              <div className="column-head">
-                <StatusIcon status={status} />
-                <h2 id={`col-${status}`} style={{ fontSize: 14, fontWeight: 600 }}>{STATUS_LABEL[status]}</h2>
+              <div className="column-head" style={{ alignItems: 'flex-start' }} title="Drag cards between columns, or use the card menu">
+                <ColumnIcon column={column} />
+                <h2 id={`col-${column.id}`} style={{ fontSize: 14, fontWeight: 600, minWidth: 0, overflowWrap: 'anywhere', lineHeight: 1.3 }}>{column.name}</h2>
                 <span className="count-pill num">{col.length}</span>
                 <span className="grow" />
                 {!readOnly && (
-                  <button type="button" className="icon-btn sm" aria-label={`Add task to ${STATUS_LABEL[status]}`} onClick={() => setAddTo(status)}>
-                    <Icon name="plus" size={16} />
-                  </button>
+                  <>
+                    <button type="button" className="icon-btn sm" aria-label={`Add task to ${column.name}`} onClick={() => setAddTo(column.id)}>
+                      <Icon name="plus" size={16} />
+                    </button>
+                    <MenuButton label={`Column options for ${column.name}`} trigger={<Icon name="more" size={16} />}>
+                      {(close) => (
+                        <>
+                          <button type="button" role="menuitem" onClick={() => { close(); setEditingColumns(true); }}>
+                            <Icon name="pen" size={16} /> Rename or edit columns
+                          </button>
+                          <button type="button" role="menuitem" disabled={colIdx === 0} onClick={() => { close(); moveStatus(project.id, column.id, colIdx - 1); }}>
+                            <Icon name="chevronLeft" size={16} /> Move column left
+                          </button>
+                          <button type="button" role="menuitem" disabled={colIdx === workflow.length - 1} onClick={() => { close(); moveStatus(project.id, column.id, colIdx + 1); }}>
+                            <Icon name="chevronRight" size={16} /> Move column right
+                          </button>
+                        </>
+                      )}
+                    </MenuButton>
+                  </>
                 )}
               </div>
               {col.length === 0 && (
@@ -156,7 +182,7 @@ export function SprintBoard() {
                       setDragId(null);
                       setOver(null);
                     }}
-                    aria-label={`${i.key} ${i.title}, ${STATUS_LABEL[i.status]}`}
+                    aria-label={`${i.key} ${i.title}, ${column.name}`}
                   >
                     <div className="col" style={{ padding: '12px 12px 10px', gap: 8 }}>
                       <div className="row" style={{ fontSize: 12 }}>
@@ -172,9 +198,9 @@ export function SprintBoard() {
                                   <Icon name="external" size={16} /> Open details
                                 </button>
                                 <div className="menu-sep" />
-                                {STATUS_ORDER.filter((s) => s !== i.status).map((s) => (
-                                  <button key={s} type="button" role="menuitem" onClick={() => { close(); move(i, s); }}>
-                                    <StatusIcon status={s} size={14} /> Move to {STATUS_LABEL[s]}
+                                {workflow.filter((w) => w.id !== column.id).map((w) => (
+                                  <button key={w.id} type="button" role="menuitem" onClick={() => { close(); move(i, w); }}>
+                                    <ColumnIcon column={w} size={14} /> Move to {w.name}
                                   </button>
                                 ))}
                                 {i.assigneeId !== me && (
@@ -223,13 +249,13 @@ export function SprintBoard() {
                   </article>
                 );
               })}
-              {status === 'done' && col.length > DONE_PREVIEW && (
+              {isDone && col.length > DONE_PREVIEW && (
                 <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--primary-darker)', justifyContent: 'flex-start' }} onClick={() => setShowAllDone((v) => !v)}>
                   {showAllDone ? 'Show fewer' : `Show ${col.length - DONE_PREVIEW} more done tasks`}
                 </button>
               )}
               {!readOnly && (
-                <button type="button" className="btn btn-ghost btn-sm" style={{ justifyContent: 'flex-start', color: 'var(--text-muted)' }} onClick={() => setAddTo(status)}>
+                <button type="button" className="btn btn-ghost btn-sm" style={{ justifyContent: 'flex-start', color: 'var(--text-muted)' }} onClick={() => setAddTo(column.id)}>
                   <Icon name="plus" size={16} /> Add task
                 </button>
               )}
@@ -237,7 +263,8 @@ export function SprintBoard() {
           );
         })}
       </div>
-      {addTo && <NewItemDialog projectId={project.id} sprintId={sprint.id} status={addTo} onClose={() => setAddTo(null)} />}
+      {addTo && <NewItemDialog projectId={project.id} sprintId={sprint.id} statusId={addTo} onClose={() => setAddTo(null)} />}
+      {editingColumns && <WorkflowDialog project={project} onClose={() => setEditingColumns(false)} />}
     </div>
   );
 }
