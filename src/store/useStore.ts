@@ -16,6 +16,7 @@ import type {
   Sprint,
   WorkflowStatus,
   WorkItem,
+  Member,
 } from '../domain/types';
 
 export const newId = (prefix: string) => `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
@@ -53,6 +54,8 @@ export interface CompleteSprintInput {
 
 interface Actions {
   resetDemo: () => void;
+  /** Make the signed-in person the current user, adding them as a member when new. */
+  signInAs: (member: Member) => void;
   toggleFavorite: (projectId: string) => void;
   markOpened: (projectId: string) => void;
   createProject: (input: NewProjectInput) => string;
@@ -151,7 +154,18 @@ export const useStore = create<State>()(
     (set, get) => ({
       ...fresh(),
 
-      resetDemo: () => set(fresh()),
+      resetDemo: () => set((s) => {
+        const next = fresh();
+        const me = s.members.find((m) => m.id === s.currentUserId);
+        if (me && !next.members.some((m) => m.id === me.id)) next.members = [...next.members, me];
+        return { ...next, currentUserId: me ? me.id : next.currentUserId };
+      }),
+
+      signInAs: (member) =>
+        set((s) => ({
+          members: s.members.some((m) => m.id === member.id) ? s.members.map((m) => (m.id === member.id ? member : m)) : [...s.members, member],
+          currentUserId: member.id,
+        })),
 
       toggleFavorite: (projectId) =>
         set((s) => ({

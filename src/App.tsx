@@ -2,6 +2,8 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from './components/AppShell';
 import { ComingSoon, NotFound } from './pages/misc';
 import { HolidayCalendarPage, MyTasksPage } from './pages/OtherPages';
+import { RequireAuth } from './auth/RequireAuth';
+import { LoginPage, ResetPasswordPage } from './pages/LoginPage';
 import { ProjectBoardPage } from './pages/ProjectBoardPage';
 import { TribePage } from './pages/TribePage';
 import { BacklogTab } from './pages/project/BacklogTab';
@@ -32,7 +34,9 @@ const LATER: [string, string][] = [
 export default function App() {
   return (
     <Routes>
-      <Route element={<AppShell />}>
+      <Route path="login" element={<LoginPage />} />
+      <Route path="reset-password" element={<ResetPasswordPage />} />
+      <Route element={<RequireAuth><AppShell /></RequireAuth>}>
         <Route index element={<Navigate to="/projects" replace />} />
         <Route path="projects" element={<ProjectBoardPage />} />
         <Route path="projects/tribe/:tribe" element={<TribePage />} />

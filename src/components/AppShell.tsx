@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, NavLink, Outlet, useLocation, useMatch, useNavigate } from 'react-router-dom';
+import { useAuth } from '../auth/AuthProvider';
 import { useStore } from '../store/useStore';
 import { TaskDrawerHost } from '../features/TaskDrawer';
 import { Icon, type IconName } from './Icon';
@@ -31,6 +32,7 @@ function Sidebar({ onSearch }: { onSearch: () => void }) {
   const me = useStore((s) => s.members.find((m) => m.id === s.currentUserId) ?? null);
   const myOpen = useStore((s) => s.items.filter((i) => i.assigneeId === s.currentUserId && i.status !== 'done' && i.sprintId).length);
   const resetDemo = useStore((s) => s.resetDemo);
+  const auth = useAuth();
   const projectMatch = useMatch('/projects/:projectId/*');
   const navigate = useNavigate();
 
@@ -114,11 +116,12 @@ function Sidebar({ onSearch }: { onSearch: () => void }) {
         <Avatar member={me} size="lg" />
         <div className="user-meta grow col" style={{ gap: 0 }}>
           <span className="truncate" style={{ fontWeight: 600 }}>{me?.name}</span>
-          <span className="muted" style={{ fontSize: 12 }}>{me?.role}</span>
+          <span className="muted truncate" style={{ fontSize: 12 }}>{auth.mode === 'demo' ? 'Demo mode' : auth.profile?.email || me?.role}</span>
         </div>
         {!collapsed && (
           <MenuButton label="Account menu" trigger={<Icon name="more" size={18} />} align="right" up>
             {(close) => (
+              <>
                 <button
                   type="button"
                   role="menuitem"
@@ -131,6 +134,18 @@ function Sidebar({ onSearch }: { onSearch: () => void }) {
                 >
                   <Icon name="refresh" size={16} /> Reset demo data
                 </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={async () => {
+                    close();
+                    await auth.signOut();
+                    navigate('/login', { replace: true });
+                  }}
+                >
+                  <Icon name="logout" size={16} /> Sign out
+                </button>
+              </>
             )}
           </MenuButton>
         )}

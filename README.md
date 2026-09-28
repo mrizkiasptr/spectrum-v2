@@ -18,6 +18,18 @@ npm run build
 
 `netlify.toml` configures everything: build command `npm run build`, publish directory `dist`, Node 22, and a catch-all redirect to `index.html` so deep links like `/projects/p-at/sprints/…` work. If the site was created before this file existed, check **Site configuration › Build & deploy** and clear any manually set publish directory (it must be `dist`, not the repo root), then trigger a new deploy.
 
+## Sign-in (Supabase)
+
+Sign-in uses **Supabase Auth**: email + password, **Sign in with Microsoft** (Azure provider), and password reset by email. There is no public sign-up — accounts are created by an admin.
+
+1. Create a Supabase project. In **SQL Editor**, run `supabase/migrations/0001_profiles.sql` (creates `profiles` with RLS and a trigger that adds a profile for every new user).
+2. **Authentication › URL Configuration**: set *Site URL* to your Netlify URL and add `https://<your-site>/reset-password` and `https://<your-site>/projects` to *Redirect URLs* (plus `http://localhost:5173/**` for local dev).
+3. **Authentication › Users › Add user** to create accounts (email + password). Optional: set `full_name` and `role` in the `profiles` table.
+4. Microsoft: **Authentication › Providers › Azure** — paste the Client ID / Secret of an Entra ID app registration whose redirect URI is `https://<project-ref>.supabase.co/auth/v1/callback`.
+5. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (Project Settings › API) in **Netlify › Site configuration › Environment variables**, or in `.env.local` for local dev (see `.env.example`), then redeploy. Vite reads them at build time.
+
+Without these variables the login page offers **Continue in demo mode** so the site still works. Signed-in people are matched to a board member by name (so demo tasks stay theirs) or added as a new member. Project data still lives in the browser (`localStorage`); moving it to Supabase tables is the next step.
+
 ## What's in this module
 
 | Area | What you can do |
