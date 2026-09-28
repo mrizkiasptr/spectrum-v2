@@ -23,7 +23,7 @@ export function CompleteSprintDialog({ sprint, onClose }: { sprint: Sprint; onCl
   const [carryTo, setCarryTo] = useState<'next' | 'backlog'>('next');
   const [notes, setNotes] = useState(sprint.reviewNotes);
   const p = progressOf(items);
-  const open = items.filter((i) => i.status !== 'done');
+  const open = items.filter((i) => i.status !== 'done' && i.type !== 'task');
   const nextDraft = sprints
     .filter((s) => s.projectId === sprint.projectId && s.status === 'draft')
     .sort((a, b) => a.number - b.number)[0];
@@ -92,7 +92,7 @@ export function CompleteSprintDialog({ sprint, onClose }: { sprint: Sprint; onCl
       {open.length > 0 && (
         <fieldset style={{ border: 0, margin: 0, padding: 0 }} className="col">
           <legend className="field-label" style={{ marginBottom: 6 }}>
-            Where should the {open.length} open task{open.length > 1 ? 's' : ''} go?
+            Where should the {open.length} unfinished backlog item{open.length > 1 ? 's' : ''} (with their tasks) go?
           </legend>
           <label className="check">
             <input type="radio" name="carry" checked={carryTo === 'next'} onChange={() => setCarryTo('next')} />
@@ -247,6 +247,9 @@ export function NewProjectDialog({ onClose, tribe }: { onClose: () => void; trib
 
 /* ---------- New task ---------- */
 
+const BACKLOG_TYPES: ItemType[] = ['story', 'bug'];
+
+/** New backlog item (story or bug), in the product backlog or planned straight into a sprint. */
 export function NewItemDialog({
   projectId,
   sprintId,
@@ -265,7 +268,7 @@ export function NewItemDialog({
   const members = useProjectMembers(projectId);
   const column = useStore((s) => s.projects.find((p) => p.id === projectId)?.workflow.find((w) => w.id === statusId));
   const [title, setTitle] = useState('');
-  const [type, setType] = useState<ItemType>(defaultType);
+  const [type, setType] = useState<ItemType>(defaultType === 'task' ? 'story' : defaultType);
   const [weight, setWeight] = useState<number | null>(null);
   const [assigneeId, setAssigneeId] = useState<string | null>(null);
   const [severity, setSeverity] = useState<Severity>('major');
@@ -285,8 +288,8 @@ export function NewItemDialog({
     <Dialog
       open
       onClose={onClose}
-      title={type === 'bug' && !sprintId ? 'Report a defect' : 'Add task'}
-      subtitle={sprint ? `To ${sprintName(sprint)}${column ? ` · ${column.name}` : ''}` : 'To the product backlog'}
+      title={type === 'bug' && !sprintId ? 'Report a defect' : 'Add backlog item'}
+      subtitle={sprint ? `Planned into ${sprintName(sprint)}${column ? ` · ${column.name}` : ''}` : 'To the product backlog. Break it into tasks once it’s planned.'}
       footer={
         <>
           <label className="check grow" style={{ fontSize: 13 }}>
@@ -301,13 +304,13 @@ export function NewItemDialog({
       <form className="col" style={{ gap: 16 }} onSubmit={(e) => { e.preventDefault(); submit(); }}>
         <div className="field">
           <label className="field-label" htmlFor="ni-title">Title <span className="req">*</span></label>
-          <input id="ni-title" data-autofocus className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="What needs to be done?" />
+          <input id="ni-title" data-autofocus className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={type === 'bug' ? 'What’s broken?' : 'What should users be able to do?'} />
         </div>
         <div className="grid-2" style={{ gap: 12 }}>
           <div className="field">
             <label className="field-label" htmlFor="ni-type">Type</label>
             <select id="ni-type" className="input" value={type} onChange={(e) => setType(e.target.value as ItemType)}>
-              {(Object.keys(TYPE_LABEL) as ItemType[]).map((t) => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}
+              {BACKLOG_TYPES.map((t) => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}
             </select>
           </div>
           {type === 'bug' ? (
@@ -330,7 +333,7 @@ export function NewItemDialog({
           )}
         </div>
         <div className="field">
-          <label className="field-label" htmlFor="ni-assignee">Assignee</label>
+          <label className="field-label" htmlFor="ni-assignee">Owner</label>
           <select id="ni-assignee" className="input" value={assigneeId ?? ''} onChange={(e) => setAssigneeId(e.target.value || null)}>
             <option value="">Unassigned</option>
             {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
@@ -338,6 +341,107 @@ export function NewItemDialog({
         </div>
         <button type="submit" hidden />
       </form>
+    </Dialog>
+  );
+}
+
+/**
+ * New task. Every task belongs to a backlog item and lands in that item's sprint,
+ * so the dialog starts by picking the item (preset when opened from an item).
+ */
+export function NewTaskDialog({
+  projectId,
+  sprintId,
+  parentId,
+  statusId,
+  onClose,
+}: {
+  projectId: string;
+  /** Offer backlog items from this sprint (null = the product backlog). */
+  sprintId: string | null;
+  parentId?: string;
+  statusId?: string;
+  onClose: () => void;
+}) {
+  const create = useStore((s) => s.createItem);
+  const allItems = useStore((s) => s.items);
+  const members = useProjectMembers(projectId);
+  const column = useStore((s) => s.projects.find((p) => p.id === projectId)?.workflow.find((w) => w.id === statusId));
+  const parents = useMemo(
+    () =>
+      allItems
+        .filter((i) => i.projectId === projectId && i.type !== 'task' && (parentId ? i.id === parentId : i.sprintId === sprintId))
+        .sort((a, b) => Number(a.status === 'done') - Number(b.status === 'done') || a.rank - b.rank),
+    [allItems, projectId, sprintId, parentId],
+  );
+  const [parent, setParent] = useState(parentId ?? parents.find((p) => p.status !== 'done')?.id ?? parents[0]?.id ?? '');
+  const [title, setTitle] = useState('');
+  const [assigneeId, setAssigneeId] = useState<string | null>(null);
+  const [another, setAnother] = useState(false);
+  const chosen = parents.find((p) => p.id === parent);
+
+  const submit = () => {
+    if (!title.trim() || !chosen) return;
+    const item = create(projectId, { title, type: 'task', sprintId: chosen.sprintId, parentId: chosen.id, assigneeId, statusId });
+    toast(`${item.key} added to ${chosen.key}.`);
+    if (another) {
+      setTitle('');
+      document.getElementById('nt-title')?.focus();
+    } else onClose();
+  };
+
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      title="Add task"
+      subtitle={chosen ? `Part of ${chosen.key}${column ? ` · ${column.name}` : ''}` : 'Tasks break a backlog item into work.'}
+      footer={
+        parents.length ? (
+          <>
+            <label className="check grow" style={{ fontSize: 13 }}>
+              <input type="checkbox" checked={another} onChange={(e) => setAnother(e.target.checked)} />
+              Add another after this
+            </label>
+            <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+            <button type="button" className="btn btn-primary" disabled={!title.trim() || !chosen} onClick={submit}>Add task</button>
+          </>
+        ) : (
+          <button type="button" className="btn btn-secondary" onClick={onClose}>Close</button>
+        )
+      }
+    >
+      {parents.length === 0 ? (
+        <div className="col" style={{ gap: 8 }}>
+          <strong>No backlog items {sprintId ? 'in this sprint' : 'yet'}</strong>
+          <p className="muted" style={{ fontSize: 13 }}>
+            Tasks always come from a backlog item. {sprintId ? 'Plan a story or bug into this sprint from the Backlog first, then break it into tasks.' : 'Add a story or bug to the backlog first.'}
+          </p>
+        </div>
+      ) : (
+        <form className="col" style={{ gap: 16 }} onSubmit={(e) => { e.preventDefault(); submit(); }}>
+          <div className="field">
+            <label className="field-label" htmlFor="nt-parent">Backlog item <span className="req">*</span></label>
+            <select id="nt-parent" className="input" value={parent} onChange={(e) => setParent(e.target.value)} disabled={!!parentId}>
+              {parents.map((p) => (
+                <option key={p.id} value={p.id}>{p.key} · {p.title}{p.status === 'done' ? ' (done)' : ''}</option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label className="field-label" htmlFor="nt-title">Task <span className="req">*</span></label>
+            <input id="nt-title" data-autofocus className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Write API contract, Review with PO" />
+          </div>
+          <div className="field">
+            <label className="field-label" htmlFor="nt-assignee">Assignee</label>
+            <select id="nt-assignee" className="input" value={assigneeId ?? ''} onChange={(e) => setAssigneeId(e.target.value || null)}>
+              <option value="">Unassigned</option>
+              {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+            </select>
+          </div>
+          <button type="submit" hidden />
+        </form>
+      )}
     </Dialog>
   );
 }

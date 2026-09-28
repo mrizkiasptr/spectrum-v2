@@ -58,7 +58,7 @@ export function TribePage() {
           </div>
           <div className="grid-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
             <StatTile icon="folder" label="Running projects" value={summary.projects} hint={`${summary.activeSprints} with an active sprint`} />
-            <StatTile icon="kanban" label="Active sprint progress" value={`${pct}%`} hint={`${summary.tasksDone} of ${summary.tasksTotal} tasks · ${summary.weightDone}/${summary.weightTotal} weight`} />
+            <StatTile icon="kanban" label="Active sprint progress" value={`${pct}%`} hint={`${summary.tasksDone} of ${summary.tasksTotal} items · ${summary.weightDone}/${summary.weightTotal} weight`} />
             <StatTile
               icon="gauge"
               label="Project health"

@@ -1,4 +1,5 @@
 import { addDays } from './dates';
+import { deriveStatus } from './hierarchy';
 import { defaultWorkflow } from './workflow';
 import type {
   Criterion,
@@ -68,6 +69,9 @@ function crit(texts: string[], doneCount = 0): Criterion[] {
   return texts.map((text, i) => ({ id: uid('c'), text, done: i < doneCount }));
 }
 
+/** A task under a backlog item: title, status, assignee, and column when it isn't the category default. */
+type TaskSpec = [title: string, status: ItemStatus, assignee: string | null, column?: string];
+
 interface ItemSpec {
   key: number;
   type: ItemType;
@@ -88,6 +92,8 @@ interface ItemSpec {
   attachments?: string[];
   reviewer?: string;
   epic?: string;
+  /** Tasks the item is broken into; the item's status follows them. */
+  tasks?: TaskSpec[];
 }
 
 export function createSeed(today: ISODate): SeedData {
@@ -208,12 +214,17 @@ export function createSeed(today: ISODate): SeedData {
   });
 
   const items: WorkItem[] = [];
+  const taskKeys: Record<string, number> = {};
   const add = (projectId: string, key: string, sprint: Sprint | null, spec: ItemSpec, rank: number) => {
     const start = sprint?.startDate ?? today;
+    const derived = deriveStatus((spec.tasks ?? []).map(([, status]) => ({ status }) as WorkItem));
+    if (derived && derived !== spec.status) spec = { ...spec, status: derived, column: undefined };
     const completedAt =
       spec.status === 'done' ? ts(addDays(start, spec.doneOffset ?? 1)) : null;
+    const parentId = uid('i');
+    const dueDate = spec.dueOffset !== undefined ? addDays(today, spec.dueOffset) : sprint?.endDate ?? null;
     items.push({
-      id: uid('i'),
+      id: parentId,
       projectId,
       key: `${key}-${spec.key}`,
       type: spec.type,
@@ -224,8 +235,9 @@ export function createSeed(today: ISODate): SeedData {
       weight: spec.weight,
       assigneeId: spec.assignee,
       reviewerId: spec.reviewer ?? null,
-      dueDate: spec.dueOffset !== undefined ? addDays(today, spec.dueOffset) : sprint?.endDate ?? null,
+      dueDate,
       sprintId: sprint?.id ?? null,
+      parentId: null,
       epic: spec.epic ?? '',
       criteria: crit(spec.criteria ?? [], spec.criteriaDone ?? (spec.status === 'done' ? 99 : 0)),
       comments: (spec.comments ?? []).map((c) => ({
@@ -238,6 +250,34 @@ export function createSeed(today: ISODate): SeedData {
       createdAt: now,
       completedAt,
     });
+    (spec.tasks ?? []).forEach(([title, status, assignee, column], n) => {
+      taskKeys[key] = (taskKeys[key] ?? 900) + 1;
+      items.push({
+        id: uid('i'),
+        projectId,
+        key: `${key}-${taskKeys[key]}`,
+        type: 'task',
+        title,
+        description: '',
+        status,
+        statusId: column ?? status,
+        weight: null,
+        assigneeId: assignee,
+        reviewerId: null,
+        dueDate,
+        sprintId: sprint?.id ?? null,
+        parentId,
+        epic: spec.epic ?? '',
+        criteria: [],
+        comments: [],
+        attachments: [],
+        severity: null,
+        release: 'unreleased',
+        rank: n,
+        createdAt: now,
+        completedAt: status === 'done' ? ts(addDays(start, Math.max(0, (spec.doneOffset ?? 1) - (spec.tasks!.length - n - 1)))) : null,
+      });
+    });
   };
 
   // Analyst Teams — Sprint 1 (active, ends in 2 days)
@@ -246,31 +286,31 @@ export function createSeed(today: ISODate): SeedData {
       description: 'Write the BRD for merchant-initiated QRIS refunds: full and partial refunds, the request time limit, and the maker-checker approval flow on the merchant dashboard.',
       criteria: ['Merchants can request a full or partial refund from the transaction details.', 'Refunds are allowed up to 7 days after a successful transaction.', 'Refunds above Rp 5.000.000 require Checker approval.', 'Refund status is visible to both the merchant and the operations team.'], criteriaDone: 2,
       comments: [{ by: 'u-am', text: 'Let’s confirm the partial refund time limit with the settlement team first.', ago: 20 }],
-      attachments: ['BRD_Refund_QRISAN_v0.3.docx', 'Refund_flow.png'] },
+      attachments: ['BRD_Refund_QRISAN_v0.3.docx', 'Refund_flow.png'], tasks: [['Draft refund business rules', 'done', 'u-mr'], ['Maker-checker approval flow diagram', 'in_progress', 'u-mr'], ['Review BRD with settlement team', 'todo', 'u-am']], },
     { key: 121, type: 'story', title: 'Merchant onboarding user stories: KYB stage', status: 'in_progress', weight: 5, assignee: 'u-rp', epic: 'Merchant onboarding',
-      description: 'Legal documents and company tax ID verification.', criteria: ['Required KYB documents listed per business type.', 'Rejection reasons are shown to the merchant.'] },
-    { key: 125, type: 'task', title: 'Update SPECVA limit-change maker-checker flow', status: 'in_progress', weight: 3, assignee: 'u-mr', criteria: ['Checker sees old and new limit side by side.'] },
+      description: 'Legal documents and company tax ID verification.', criteria: ['Required KYB documents listed per business type.', 'Rejection reasons are shown to the merchant.'], tasks: [['List KYB documents per business type', 'done', 'u-rp'], ['Write rejection reason stories', 'in_progress', 'u-rp']], },
+    { key: 125, type: 'story', title: 'Update SPECVA limit-change maker-checker flow', status: 'in_progress', weight: 3, assignee: 'u-mr', criteria: ['Checker sees old and new limit side by side.'], tasks: [['Update checker screen spec', 'in_progress', 'u-mr'], ['Confirm limits with risk team', 'todo', 'u-am']], },
     { key: 127, type: 'bug', title: 'Revise acceptance criteria for failed payment alerts', status: 'todo', weight: 2, assignee: 'u-ds', severity: 'minor', description: 'Old AC did not cover bank timeouts.' },
-    { key: 131, type: 'story', title: 'QRIS reconciliation report requirements analysis', status: 'todo', weight: 5, assignee: 'u-mr', description: 'Collect report formats from 3 partner banks.', criteria: ['Formats collected from all 3 banks.'] },
-    { key: 134, type: 'task', title: 'Review Autopay SNAP FSD: failed debit scenarios', status: 'todo', weight: 3, assignee: 'u-am', description: 'Make sure retries and customer notifications are covered.' },
-    { key: 112, type: 'story', title: 'SNAP VA Transfer gap analysis', status: 'review', weight: 5, assignee: 'u-mr', reviewer: 'u-ag', description: 'Waiting for PO review before handing off to dev.', criteria: ['Gap list signed off by PO.'] },
-    { key: 109, type: 'task', title: 'Analyst document checkpoint & review', status: 'review', weight: 2, assignee: 'u-am' },
+    { key: 131, type: 'story', title: 'QRIS reconciliation report requirements analysis', status: 'todo', weight: 5, assignee: 'u-mr', description: 'Collect report formats from 3 partner banks.', criteria: ['Formats collected from all 3 banks.'], tasks: [['Collect report format from BCA', 'todo', 'u-mr'], ['Collect report format from BRI', 'todo', 'u-mr'], ['Collect report format from Mandiri', 'todo', 'u-ds']], },
+    { key: 134, type: 'story', title: 'Review Autopay SNAP FSD: failed debit scenarios', status: 'todo', weight: 3, assignee: 'u-am', description: 'Make sure retries and customer notifications are covered.' },
+    { key: 112, type: 'story', title: 'SNAP VA Transfer gap analysis', status: 'review', weight: 5, assignee: 'u-mr', reviewer: 'u-ag', description: 'Waiting for PO review before handing off to dev.', criteria: ['Gap list signed off by PO.'], tasks: [['Compare current API with SNAP spec', 'done', 'u-mr'], ['Gap list review with PO', 'review', 'u-ag']], },
+    { key: 109, type: 'story', title: 'Analyst document checkpoint & review', status: 'review', weight: 2, assignee: 'u-am' },
     { key: 101, type: 'story', title: 'New merchant application approval flow', status: 'done', weight: 5, assignee: 'u-rp', doneOffset: 3, release: 'released', criteria: ['Two-level maker-checker.'] },
-    { key: 102, type: 'task', title: 'Stakeholder map for QRISAN refund', status: 'done', weight: 2, assignee: 'u-mr', doneOffset: 2 },
+    { key: 102, type: 'story', title: 'Stakeholder map for QRISAN refund', status: 'done', weight: 2, assignee: 'u-mr', doneOffset: 2 },
     { key: 103, type: 'story', title: 'Merchant settlement schedule rules', status: 'done', weight: 5, assignee: 'u-ds', doneOffset: 5, release: 'partial' },
-    { key: 104, type: 'task', title: 'VA inquiry API documentation', status: 'done', weight: 2, assignee: 'u-mr', doneOffset: 4 },
+    { key: 104, type: 'story', title: 'VA inquiry API documentation', status: 'done', weight: 2, assignee: 'u-mr', doneOffset: 4 },
     { key: 105, type: 'story', title: 'MDR fee configuration requirements', status: 'done', weight: 3, assignee: 'u-am', doneOffset: 6 },
-    { key: 106, type: 'task', title: 'Refund process interviews with 4 merchants', status: 'done', weight: 3, assignee: 'u-mr', doneOffset: 7 },
+    { key: 106, type: 'story', title: 'Refund process interviews with 4 merchants', status: 'done', weight: 3, assignee: 'u-mr', doneOffset: 7 },
     { key: 107, type: 'story', title: 'Chargeback dispute flow as-is mapping', status: 'done', weight: 5, assignee: 'u-rp', doneOffset: 9 },
-    { key: 108, type: 'task', title: 'BRD template update for SNAP services', status: 'done', weight: 1, assignee: 'u-ds', doneOffset: 10 },
+    { key: 108, type: 'story', title: 'BRD template update for SNAP services', status: 'done', weight: 1, assignee: 'u-ds', doneOffset: 10 },
     { key: 110, type: 'story', title: 'Refund notification copy (email & WhatsApp)', status: 'done', weight: 3, assignee: 'u-mr', doneOffset: 11 },
-    { key: 111, type: 'task', title: 'Glossary of settlement terms', status: 'done', weight: 1, assignee: 'u-am', doneOffset: 12 },
+    { key: 111, type: 'story', title: 'Glossary of settlement terms', status: 'done', weight: 1, assignee: 'u-am', doneOffset: 12 },
   ];
   atSprint.forEach((s, i) => add('p-at', 'ANL', at1, s, i));
   const atBacklog: ItemSpec[] = [
     { key: 138, type: 'story', title: 'Map VA transaction statuses to SNAP BI', status: 'todo', weight: 3, assignee: null, criteria: ['Mapping table from internal response codes to SNAP.'] },
     { key: 139, type: 'story', title: 'Refund API specification', status: 'todo', weight: null, assignee: null, description: 'Depends on the approved refund BRD.' },
-    { key: 140, type: 'task', title: 'Partial refund edge cases workshop', status: 'todo', weight: null, assignee: null },
+    { key: 140, type: 'story', title: 'Partial refund edge cases workshop', status: 'todo', weight: null, assignee: null },
   ];
   atBacklog.forEach((s, i) => add('p-at', 'ANL', null, s, 100 + i));
 
@@ -278,11 +318,11 @@ export function createSeed(today: ISODate): SeedData {
   const speSprint: ItemSpec[] = [
     { key: 402, type: 'story', title: 'Project list with filters and favorites', status: 'done', weight: 5, assignee: 'u-fn', doneOffset: 2 },
     { key: 403, type: 'story', title: 'Sprint setup dialog with flexible length', status: 'done', weight: 5, assignee: 'u-fn', doneOffset: 4 },
-    { key: 404, type: 'story', title: 'Holiday-aware working days', status: 'in_progress', weight: 5, assignee: 'u-fn' },
-    { key: 405, type: 'story', title: 'Sprint board drag and drop', status: 'review', column: 'qa', weight: 8, assignee: 'u-fn', reviewer: 'u-lp' },
-    { key: 406, type: 'task', title: 'Usability test script for Project Board v2', status: 'in_progress', weight: 3, assignee: 'u-mr' },
+    { key: 404, type: 'story', title: 'Holiday-aware working days', status: 'in_progress', weight: 5, assignee: 'u-fn', tasks: [['Working-day calculation', 'done', 'u-fn'], ['Collective leave toggle', 'in_progress', 'u-fn'], ['Unit tests for holidays', 'todo', 'u-lp']], },
+    { key: 405, type: 'story', title: 'Sprint board drag and drop', status: 'review', column: 'qa', weight: 8, assignee: 'u-fn', reviewer: 'u-lp', tasks: [['Drag between columns', 'done', 'u-fn'], ['Keyboard move menu', 'done', 'u-fn'], ['QA on Safari and Chrome', 'review', 'u-lp', 'qa']], },
+    { key: 406, type: 'story', title: 'Usability test script for Project Board v2', status: 'in_progress', weight: 3, assignee: 'u-mr', tasks: [['Write test scenarios', 'done', 'u-mr'], ['Recruit 5 BA participants', 'in_progress', 'u-mr']], },
     { key: 407, type: 'bug', title: 'Board loses scroll position after moving a card', status: 'todo', weight: 2, assignee: 'u-fn', severity: 'critical' },
-    { key: 408, type: 'task', title: 'Burndown chart', status: 'todo', weight: 3, assignee: 'u-rp' },
+    { key: 408, type: 'story', title: 'Burndown chart', status: 'todo', weight: 3, assignee: 'u-rp', tasks: [['Burndown data calculation', 'todo', 'u-rp'], ['Chart component', 'todo', 'u-rp']], },
   ];
   speSprint.forEach((s, i) => add('p-spe', 'SPE', spe16, s, i));
   const speDone15: ItemSpec[] = [
@@ -297,12 +337,12 @@ export function createSeed(today: ISODate): SeedData {
   const qmSprint: ItemSpec[] = [
     { key: 51, type: 'story', title: 'QRIS payment notification to merchant app', status: 'done', weight: 5, assignee: 'u-fn', doneOffset: 3 },
     { key: 52, type: 'story', title: 'Pilot merchant onboarding checklist', status: 'done', weight: 3, assignee: 'u-mr', doneOffset: 5 },
-    { key: 53, type: 'story', title: 'Dynamic QR generation for pilot merchants', status: 'in_progress', weight: 8, assignee: 'u-fn' },
-    { key: 54, type: 'task', title: 'End-to-end payment test with MANTAP UAT', status: 'todo', weight: 5, assignee: 'u-lp' },
+    { key: 53, type: 'story', title: 'Dynamic QR generation for pilot merchants', status: 'in_progress', weight: 8, assignee: 'u-fn', tasks: [['QR payload builder', 'done', 'u-fn'], ['Expiry and refresh handling', 'in_progress', 'u-fn'], ['Merchant app QR screen', 'todo', 'u-fn']], },
+    { key: 54, type: 'story', title: 'End-to-end payment test with MANTAP UAT', status: 'todo', weight: 5, assignee: 'u-lp', tasks: [['Prepare UAT test cases', 'todo', 'u-lp'], ['Run payment test with MANTAP', 'todo', 'u-lp']], },
     { key: 55, type: 'bug', title: 'Duplicate payment callback on retry', status: 'review', weight: 3, assignee: 'u-fn', severity: 'major' },
   ];
   qmSprint.forEach((s, i) => add('p-mantap', 'QMT', qm5, s, i));
-  add('p-mantap', 'QMT', qm6, { key: 61, type: 'story', title: 'Settlement report in merchant portal', status: 'todo', weight: 8, assignee: 'u-mr', criteria: ['Daily settlement report downloadable as CSV.'] }, 20);
+  add('p-mantap', 'QMT', qm6, { key: 61, type: 'story', title: 'Settlement report in merchant portal', status: 'todo', weight: 8, assignee: 'u-mr', criteria: ['Daily settlement report downloadable as CSV.'], tasks: [['Report layout with finance', 'todo', 'u-mr'], ['CSV export endpoint', 'todo', 'u-fn']], }, 20);
 
   // Kaltimtara — backlog only
   add('p-kaltim', 'QKT', null, { key: 12, type: 'story', title: 'Merchant category code mapping', status: 'todo', weight: 3, assignee: 'u-ds', criteria: ['MCC list agreed with bank.'] }, 0);
@@ -320,6 +360,13 @@ export function createSeed(today: ISODate): SeedData {
     { id: uid('d'), projectId: 'p-at', title: 'QRISAN Refund BRD v0.3', url: 'https://example.com/refund-brd', addedBy: 'u-mr', updatedAt: ts(addDays(today, -1)) },
     { id: uid('d'), projectId: 'p-spe', title: 'Project Board v2 prototype', url: 'https://example.com/prototype', addedBy: 'u-mr', updatedAt: ts(addDays(today, -3)) },
   ];
+
+  // Task keys continue after each project's highest backlog key, like new items would.
+  for (const prefix of new Set(items.map((i) => i.key.split('-')[0]))) {
+    const own = items.filter((i) => i.key.startsWith(`${prefix}-`));
+    let next = Math.max(...own.filter((i) => i.type !== 'task').map((i) => Number(i.key.split('-')[1])));
+    for (const t of own.filter((i) => i.type === 'task')) t.key = `${prefix}-${++next}`;
+  }
 
   const y = Number(today.slice(0, 4));
   return {

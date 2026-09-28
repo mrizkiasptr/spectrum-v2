@@ -86,6 +86,10 @@ export function SprintTaskList() {
                     <div className="row">
                       <TypeBadge type={i.type} />
                       <button type="button" className="task-card-title truncate" onClick={() => setParams({ task: i.id })}>{i.title}</button>
+                      {i.parentId && (() => {
+                        const parent = items.find((x) => x.id === i.parentId);
+                        return parent ? <span className="muted truncate" style={{ fontSize: 12 }}>in {parent.key}</span> : null;
+                      })()}
                     </div>
                   </td>
                   <td><ItemStatusBadge item={i} /></td>
@@ -151,8 +155,8 @@ export function SprintReport() {
   return (
     <div className="page" style={{ paddingTop: 16 }}>
       <div className="grid-3">
-        <div className="card metric"><span className="metric-label">Scope</span><span className="metric-value">{p.total} tasks</span><span className="metric-label">{p.totalWeight} weight</span></div>
-        <div className="card metric"><span className="metric-label">Done</span><span className="metric-value">{p.done} tasks</span><span className="metric-label">{p.doneWeight} weight delivered</span></div>
+        <div className="card metric"><span className="metric-label">Scope</span><span className="metric-value">{p.total} items</span><span className="metric-label">{p.totalWeight} weight</span></div>
+        <div className="card metric"><span className="metric-label">Done</span><span className="metric-value">{p.done} items</span><span className="metric-label">{p.doneWeight} weight delivered</span></div>
         <div className="card metric">
           <span className="metric-label">Remaining</span>
           <span className="metric-value">{p.totalWeight - p.doneWeight} weight</span>
@@ -231,8 +235,8 @@ export function SprintReview() {
   const updateSprint = useStore((s) => s.updateSprint);
   const [notes, setNotes] = useState(sprint.reviewNotes);
   const [, setParams] = useSearchParams();
-  const done = items.filter((i) => i.status === 'done');
-  const open = items.filter((i) => i.status !== 'done');
+  const done = items.filter((i) => i.status === 'done' && i.type !== 'task');
+  const open = items.filter((i) => i.status !== 'done' && i.type !== 'task');
 
   const list = (arr: WorkItem[]) => (
     <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column' }}>
@@ -293,7 +297,7 @@ export function SprintReview() {
       {sprint.status === 'completed' && sprint.closedSummary && (
         <p className="muted" style={{ fontSize: 13 }}>
           Closed with {sprint.closedSummary.doneWeight} of {sprint.closedSummary.totalWeight} weight delivered
-          {sprint.closedSummary.carriedOver ? ` · ${sprint.closedSummary.carriedOver} tasks carried over` : ''}.
+          {sprint.closedSummary.carriedOver ? ` · ${sprint.closedSummary.carriedOver} items carried over` : ''}.
         </p>
       )}
     </div>

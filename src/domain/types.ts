@@ -122,8 +122,10 @@ export interface WorkItem {
   assigneeId: string | null;
   reviewerId: string | null;
   dueDate: ISODate | null;
-  /** null = product backlog. */
+  /** null = product backlog. Tasks always share their backlog item's sprint. */
   sprintId: string | null;
+  /** Tasks only: the backlog item (story or bug) this task is part of. */
+  parentId: string | null;
   epic: string;
   criteria: Criterion[];
   comments: Comment[];

@@ -108,7 +108,7 @@ export function SprintLayout() {
             </div>
             <div className="col" style={{ width: 200, gap: 6, paddingTop: 4 }}>
               <div className="row num" style={{ justifyContent: 'space-between', fontSize: 12 }}>
-                <span className="muted">{p.done} / {p.total} tasks</span>
+                <span className="muted">{p.done} / {p.total} items done</span>
                 <strong>{p.pct}%</strong>
               </div>
               <Progress pct={p.pct} label="Sprint progress" />

@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import { addDays, diffDays, lengthInDays, todayISO } from '../domain/dates';
 import { createSeed, type SeedData } from '../domain/seed';
 import { nextSprintNumber, startBlocker, suggestPeriod } from '../domain/sprint';
+import { normalizeItem, syncParents } from '../domain/hierarchy';
 import { defaultWorkflow, findStatus, firstOfCategory, validateWorkflow } from '../domain/workflow';
 import type {
   Doc,
@@ -43,6 +44,8 @@ export interface NewItemInput {
   assigneeId?: string | null;
   severity?: WorkItem['severity'];
   description?: string;
+  /** Required for tasks: the backlog item they belong to (they take its sprint). */
+  parentId?: string | null;
 }
 
 export interface CompleteSprintInput {
@@ -119,6 +122,11 @@ function workflowOf(projects: Project[], projectId: string): WorkflowStatus[] {
   return projects.find((p) => p.id === projectId)?.workflow ?? defaultWorkflow();
 }
 
+/** Keeps backlog items in step with their tasks (status, sprint) after any item change. */
+function synced(projects: Project[], items: WorkItem[]): WorkItem[] {
+  return syncParents(items, (pid) => workflowOf(projects, pid));
+}
+
 const LIST_KEYS = ['members', 'projects', 'sprints', 'items', 'retro', 'docs', 'holidays', 'favorites', 'recent'] as const;
 
 /**
@@ -137,14 +145,16 @@ export function migrateState(persisted: unknown, _version?: number, fallback: Pa
     workflow: Array.isArray(p.workflow) && p.workflow.some((w) => w.category === 'done') ? p.workflow : defaultWorkflow(),
     memberIds: Array.isArray(p.memberIds) ? p.memberIds : [],
   }));
-  st.items = st.items!.map((i) => ({
-    ...i,
-    statusId: i.statusId ?? i.status ?? 'todo',
-    status: i.status ?? 'todo',
-    criteria: Array.isArray(i.criteria) ? i.criteria : [],
-    comments: Array.isArray(i.comments) ? i.comments : [],
-    attachments: Array.isArray(i.attachments) ? i.attachments : [],
-  }));
+  st.items = st.items!.map((i) =>
+    normalizeItem({
+      ...i,
+      statusId: i.statusId ?? i.status ?? 'todo',
+      status: i.status ?? 'todo',
+      criteria: Array.isArray(i.criteria) ? i.criteria : [],
+      comments: Array.isArray(i.comments) ? i.comments : [],
+      attachments: Array.isArray(i.attachments) ? i.attachments : [],
+    }),
+  );
   if (typeof st.currentUserId !== 'string') st.currentUserId = fallback.currentUserId;
   return st;
 }
@@ -245,8 +255,10 @@ export const useStore = create<State>()(
       completeSprint: (sprintId, input) => {
         const s = get();
         const sprint = s.sprints.find((sp) => sp.id === sprintId)!;
-        const scope = s.items.filter((i) => i.sprintId === sprintId);
+        // Backlog items carry over with all their tasks; tasks never move on their own.
+        const scope = s.items.filter((i) => i.sprintId === sprintId && i.type !== 'task');
         const open = scope.filter((i) => i.status !== 'done');
+        const openIds = new Set(open.map((i) => i.id));
         let nextSprintId: string | null = null;
         let sprints = s.sprints;
         if (input.carryTo === 'next' && open.length) {
@@ -275,8 +287,9 @@ export const useStore = create<State>()(
                 }
               : sp,
           ),
-          items: st.items.map((i) =>
-            i.sprintId === sprintId && i.status !== 'done' ? { ...i, sprintId: nextSprintId } : i,
+          items: synced(
+            st.projects,
+            st.items.map((i) => (openIds.has(i.id) ? { ...i, sprintId: nextSprintId } : i)),
           ),
         }));
         return { carried: open.length, nextSprintId };
@@ -292,6 +305,8 @@ export const useStore = create<State>()(
         const s = get();
         const project = s.projects.find((p) => p.id === projectId)!;
         const maxRank = s.items.filter((i) => i.projectId === projectId).reduce((m, i) => Math.max(m, i.rank), 0);
+        const parent = input.type === 'task' ? s.items.find((i) => i.id === input.parentId && i.type !== 'task') : undefined;
+        if (input.type === 'task' && !parent) throw new Error('A task needs a backlog item.');
         const column =
           (input.statusId && findStatus(project.workflow, input.statusId)) || firstOfCategory(project.workflow, input.status ?? 'todo');
         const status = column.category;
@@ -304,12 +319,13 @@ export const useStore = create<State>()(
           description: input.description ?? '',
           status,
           statusId: column.id,
-          weight: input.weight ?? null,
+          weight: parent ? null : input.weight ?? null,
           assigneeId: input.assigneeId ?? null,
           reviewerId: null,
           dueDate: null,
-          sprintId: input.sprintId,
-          epic: '',
+          sprintId: parent ? parent.sprintId : input.sprintId,
+          parentId: parent?.id ?? null,
+          epic: parent?.epic ?? '',
           criteria: [],
           comments: [],
           attachments: [],
@@ -319,13 +335,13 @@ export const useStore = create<State>()(
           createdAt: new Date().toISOString(),
           completedAt: status === 'done' ? new Date().toISOString() : null,
         };
-        set((st) => ({ items: [...st.items, item] }));
+        set((st) => ({ items: synced(st.projects, [...st.items, item]) }));
         return item;
       },
 
       updateItem: (itemId, patch) =>
         set((s) => ({
-          items: s.items.map((i) => {
+          items: synced(s.projects, s.items.map((i) => {
             if (i.id !== itemId) return i;
             const { status, statusId, ...rest } = patch;
             const next = { ...i, ...rest };
@@ -336,20 +352,23 @@ export const useStore = create<State>()(
             }
             if (status && status !== i.status) return toColumn(next, firstOfCategory(workflow, status));
             return next;
-          }),
+          })),
         })),
 
-      deleteItem: (itemId) => set((s) => ({ items: s.items.filter((i) => i.id !== itemId) })),
+      // Deleting a backlog item deletes its tasks.
+      deleteItem: (itemId) =>
+        set((s) => ({ items: synced(s.projects, s.items.filter((i) => i.id !== itemId && i.parentId !== itemId)) })),
 
+      // Moving a backlog item moves its tasks with it.
       moveToSprint: (itemIds, sprintId) =>
-        set((s) => ({ items: s.items.map((i) => (itemIds.includes(i.id) ? { ...i, sprintId } : i)) })),
+        set((s) => ({ items: synced(s.projects, s.items.map((i) => (itemIds.includes(i.id) ? { ...i, sprintId } : i))) })),
 
       reorderBacklog: (itemId, direction) =>
         set((s) => {
           const item = s.items.find((i) => i.id === itemId);
           if (!item) return {};
           const list = s.items
-            .filter((i) => i.projectId === item.projectId && i.sprintId === null && i.status !== 'done')
+            .filter((i) => i.projectId === item.projectId && i.sprintId === null && i.status !== 'done' && i.type !== 'task')
             .sort((a, b) => a.rank - b.rank);
           const idx = list.findIndex((i) => i.id === itemId);
           const swap = list[idx + direction];
@@ -440,7 +459,7 @@ export const useStore = create<State>()(
           items:
             updated.category === current.category
               ? s.items
-              : s.items.map((i) => (i.projectId === projectId && i.statusId === statusId ? toColumn(i, updated) : i)),
+              : synced(s.projects, s.items.map((i) => (i.projectId === projectId && i.statusId === statusId ? toColumn(i, updated) : i))),
         }));
         return null;
       },
@@ -454,7 +473,7 @@ export const useStore = create<State>()(
         if (error) return error;
         set((s) => ({
           projects: s.projects.map((p) => (p.id === projectId ? { ...p, workflow: next } : p)),
-          items: s.items.map((i) => (i.projectId === projectId && i.statusId === statusId ? toColumn(i, target) : i)),
+          items: synced(s.projects, s.items.map((i) => (i.projectId === projectId && i.statusId === statusId ? toColumn(i, target) : i))),
         }));
         return null;
       },

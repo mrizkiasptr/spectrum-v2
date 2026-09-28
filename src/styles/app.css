@@ -229,7 +229,7 @@ h1, h2, h3, h4, p { margin: 0; }
 .avatar.me { background: var(--me); color: #fff; }
 .avatar.md { width: 30px; height: 30px; font-size: 10px; }
 .avatar.lg { width: 36px; height: 36px; font-size: 12px; }
-.avatar.empty { background: #fff; border: 1px dashed var(--border-strong); color: var(--text-subtle); }
+.avatar.unassigned { background: #fff; border: 1px dashed var(--border-strong); color: var(--text-subtle); }
 .avatar-stack { display: flex; padding-left: 6px; }
 .avatar-stack .avatar { margin-left: -6px; border: 2px solid #fff; }
 
@@ -425,3 +425,24 @@ h1, h2, h3, h4, p { margin: 0; }
 .banner svg { flex: none; margin-top: 1px; }
 .page-banner { margin: 16px 32px 0; }
 @media (max-width: 860px) { .page-banner { margin: 12px 16px 0; } }
+
+/* ---------- Sprint taskboard: one lane per backlog item ---------- */
+.taskboard { display: grid; overflow: auto; max-height: calc(100vh - 260px); border: 1px solid var(--border); border-radius: var(--radius-lg); background: #fff; position: relative; }
+.tb-lane { display: contents; }
+.tb-head { position: sticky; top: 0; z-index: 2; background: var(--column); border-bottom: 1px solid var(--border); padding: 6px 8px; }
+.tb-head.tb-sticky { z-index: 3; }
+.tb-sticky { position: sticky; left: 0; }
+.tb-lane-head { z-index: 1; background: #fff; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.tb-lane-head.collapsed { padding-top: 8px; padding-bottom: 8px; }
+.tb-cell { background: var(--column); border-bottom: 1px solid var(--border); border-right: 1px solid var(--border-soft); padding: 8px; display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 72px; }
+.tb-cell.collapsed { min-height: 0; justify-content: center; align-items: center; padding: 6px; }
+.tb-cell.drop { outline: 2px dashed var(--primary); outline-offset: -3px; background: var(--primary-subtle); }
+.tb-empty { padding: 32px 16px; text-align: center; color: var(--text-muted); font-size: 13px; }
+.tb-progress { height: 4px; border-radius: 999px; background: var(--border); overflow: hidden; }
+.tb-progress span { display: block; height: 100%; background: var(--success); border-radius: 999px; }
+.task-card.is-task { border-left: 3px solid var(--primary-border, #9CC8F3); }
+.task-chip { font-size: 11px; font-weight: 600; color: var(--text-muted); background: var(--surface-sunken); border-radius: 4px; padding: 1px 6px; }
+.parent-link { display: flex; align-items: center; gap: 4px; max-width: 100%; border: 0; background: none; padding: 0; font: inherit; font-size: 12px; color: var(--text-muted); cursor: pointer; text-align: left; }
+.parent-link:hover { color: var(--primary-darker); text-decoration: underline; }
+@media (max-width: 860px) { .taskboard { max-height: none; } }
+.table tr.subrow td { background: var(--surface-muted); padding-top: 6px; padding-bottom: 6px; }

@@ -21,7 +21,7 @@ export function ReleasesTab() {
   const [filter, setFilter] = useState<ReleaseState | 'all'>('unreleased');
   const [selected, setSelected] = useState<string[]>([]);
 
-  const done = items.filter((i) => i.status === 'done').sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? ''));
+  const done = items.filter((i) => i.status === 'done' && i.type !== 'task').sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? ''));
   const counts = { unreleased: 0, partial: 0, released: 0 } as Record<ReleaseState, number>;
   done.forEach((i) => counts[i.release]++);
   const shown = done.filter((i) => filter === 'all' || i.release === filter);

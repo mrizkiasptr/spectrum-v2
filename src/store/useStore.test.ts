@@ -8,8 +8,9 @@ describe('store', () => {
   beforeEach(() => s().resetDemo());
 
   it('creates items with the next project key', () => {
+    const max = Math.max(...s().items.filter((i) => i.projectId === 'p-at').map((i) => Number(i.key.split('-')[1])));
     const item = s().createItem('p-at', { title: 'New analysis', type: 'story', sprintId: null });
-    expect(item.key).toBe('ANL-141');
+    expect(item.key).toBe(`ANL-${max + 1}`);
     expect(s().items.find((i) => i.id === item.id)?.sprintId).toBeNull();
   });
 
@@ -27,7 +28,9 @@ describe('store', () => {
   it('completes a sprint and carries unfinished work to the next draft', () => {
     const active = s().sprints.find((sp) => sp.projectId === 'p-at' && sp.status === 'active')!;
     const draft = s().sprints.find((sp) => sp.projectId === 'p-at' && sp.status === 'draft')!;
-    const open = s().items.filter((i) => i.sprintId === active.id && i.status !== 'done').length;
+    const openItems = s().items.filter((i) => i.sprintId === active.id && i.type !== 'task' && i.status !== 'done');
+    const open = openItems.length;
+    const openTasks = s().items.filter((i) => openItems.some((o) => o.id === i.parentId)).length;
 
     const res = s().completeSprint(active.id, { outcome: 'partial', reviewNotes: 'ok', carryTo: 'next' });
     expect(res).toEqual({ carried: open, nextSprintId: draft.id });
@@ -35,7 +38,9 @@ describe('store', () => {
     expect(closed.status).toBe('completed');
     expect(closed.goalOutcome).toBe('partial');
     expect(closed.closedSummary?.carriedOver).toBe(open);
-    expect(s().items.filter((i) => i.sprintId === draft.id)).toHaveLength(open);
+    expect(s().items.filter((i) => i.sprintId === draft.id && i.type !== 'task')).toHaveLength(open);
+    // Tasks travel with their backlog item.
+    expect(s().items.filter((i) => i.sprintId === draft.id && i.type === 'task')).toHaveLength(openTasks);
   });
 
   it('creates a draft sprint when carrying over and none exists', () => {

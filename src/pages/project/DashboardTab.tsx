@@ -7,6 +7,7 @@ import { fmtDue, fmtRange } from '../../domain/dates';
 import { projectInsight, workloadOf } from '../../domain/insights';
 import { attentionFor, isSprintReady, progressOf, sprintDaysLabel, sprintName } from '../../domain/sprint';
 import type { Sprint } from '../../domain/types';
+import { boardCards } from '../../domain/hierarchy';
 import { columnOf } from '../../domain/workflow';
 import { tribePath } from '../tribe-parts';
 import { useToday } from '../../store/hooks';
@@ -31,7 +32,7 @@ export function DashboardTab() {
   const base = `/projects/${project.id}`;
   const attention = useMemo(() => attentionFor(project, sprints, items, holidays, today), [project, sprints, items, holidays, today]);
   const mine = items.filter((i) => i.projectId === project.id);
-  const backlog = mine.filter((i) => i.sprintId === null && i.status !== 'done');
+  const backlog = mine.filter((i) => i.sprintId === null && i.status !== 'done' && i.type !== 'task');
   const projectSprints = sprints
     .filter((x) => x.projectId === project.id)
     .sort((a, b) => STATUS_RANK[a.status] - STATUS_RANK[b.status] || (a.status === 'completed' ? b.number - a.number : a.number - b.number));
@@ -45,7 +46,8 @@ export function DashboardTab() {
     ...(active ? [{ label: `${sprintName(active)} *`, value: progressOf(scope).doneWeight, partial: true }] : []),
   ];
 
-  const columns = project.workflow.map((w) => ({ column: w, count: scope.filter((i) => columnOf(project.workflow, i).id === w.id).length }));
+  const cards = boardCards(scope);
+  const columns = project.workflow.map((w) => ({ column: w, count: cards.filter((i) => columnOf(project.workflow, i).id === w.id).length }));
   const maxCol = Math.max(1, ...columns.map((c) => c.count));
   const maxLoad = Math.max(1, ...workload.map((w) => w.openWeight + w.doneWeight));
 
@@ -87,7 +89,7 @@ export function DashboardTab() {
                 <ProgressVsTime progress={insight.progressPct} time={insight.timePct} />
                 <div className="row wrap" style={{ gap: 12 }}>
                   <StatusMiniBar byStatus={insight.byStatus} width={180} />
-                  <span className="muted num" style={{ fontSize: 12 }}>{insight.progress.done}/{insight.progress.total} tasks · {insight.progress.doneWeight}/{insight.progress.totalWeight} weight</span>
+                  <span className="muted num" style={{ fontSize: 12 }}>{insight.progress.done}/{insight.progress.total} items · {insight.progress.doneWeight}/{insight.progress.totalWeight} weight</span>
                   <span className="grow" />
                   <Link to={`${base}/sprints/${active.id}/report`} className="btn btn-secondary btn-md">Report</Link>
                   <Link to={`${base}/sprints/${active.id}`} className="btn btn-primary btn-md"><Icon name="kanban" size={16} /> Open board</Link>
@@ -324,7 +326,7 @@ function SprintRow({ sprint, scope, onOpen }: { sprint: Sprint; scope: ReturnTyp
             <span className="muted num" style={{ fontSize: 12 }}>{p.done}/{p.total} done</span>
           </div>
         ) : (
-          <span className="subtle">No tasks</span>
+          <span className="subtle">No items</span>
         )}
       </td>
       <td className="num" style={{ textAlign: 'right' }}>{planned ? <><strong>{delivered}</strong><span className="muted">/{planned}</span></> : <span className="subtle">—</span>}</td>

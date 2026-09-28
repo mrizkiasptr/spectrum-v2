@@ -40,14 +40,15 @@ describe('workflow editing', () => {
   it('moves items into a custom column and keeps progress by category', () => {
     s().addStatus('p-at', { name: 'Ready for UAT', category: 'review', color: '#7C3AED' });
     const uat = workflow().find((w) => w.name === 'Ready for UAT')!;
-    s().updateItem(item('ANL-118').id, { statusId: uat.id });
-    expect(item('ANL-118')).toMatchObject({ statusId: uat.id, status: 'review' });
+    const doneBefore = progressOf(s().items.filter((i) => i.sprintId === item('ANL-127').sprintId)).byStatus.done;
+    s().updateItem(item('ANL-127').id, { statusId: uat.id });
+    expect(item('ANL-127')).toMatchObject({ statusId: uat.id, status: 'review' });
 
     s().updateStatus('p-at', uat.id, { category: 'done' });
-    expect(item('ANL-118').status).toBe('done');
-    expect(item('ANL-118').completedAt).not.toBeNull();
-    const sprintItems = s().items.filter((i) => i.sprintId === item('ANL-118').sprintId);
-    expect(progressOf(sprintItems).byStatus.done).toBe(11);
+    expect(item('ANL-127').status).toBe('done');
+    expect(item('ANL-127').completedAt).not.toBeNull();
+    const sprintItems = s().items.filter((i) => i.sprintId === item('ANL-127').sprintId);
+    expect(progressOf(sprintItems).byStatus.done).toBe(doneBefore + 1);
   });
 
   it('deletes a status by moving its tasks elsewhere', () => {
@@ -64,9 +65,10 @@ describe('workflow editing', () => {
   });
 
   it('creates new tasks in the requested column', () => {
-    const created = s().createItem('p-spe', { title: 'QA pass', type: 'task', sprintId: null, statusId: 'qa' });
-    expect(created).toMatchObject({ statusId: 'qa', status: 'review' });
-    const plain = s().createItem('p-spe', { title: 'Backlog item', type: 'task', sprintId: null });
+    const parent = item('SPE-404');
+    const created = s().createItem('p-spe', { title: 'QA pass', type: 'task', sprintId: null, statusId: 'qa', parentId: parent.id });
+    expect(created).toMatchObject({ statusId: 'qa', status: 'review', sprintId: parent.sprintId });
+    const plain = s().createItem('p-spe', { title: 'Backlog item', type: 'story', sprintId: null });
     expect(plain).toMatchObject({ statusId: 'todo', status: 'todo' });
   });
 

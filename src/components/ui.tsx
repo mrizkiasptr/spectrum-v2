@@ -10,7 +10,7 @@ export function Avatar({ member, size, title }: { member: Member | null; size?: 
   const me = useStore((s) => s.currentUserId);
   if (!member) {
     return (
-      <span className={`avatar empty ${size ?? ''}`} title={title ?? 'Unassigned'} aria-label={title ?? 'Unassigned'}>
+      <span className={`avatar unassigned ${size ?? ''}`} title={title ?? 'Unassigned'} aria-label={title ?? 'Unassigned'}>
         ?
       </span>
     );

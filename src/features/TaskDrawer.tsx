@@ -2,7 +2,8 @@ import { useEffect, useState, type CSSProperties } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Icon } from '../components/Icon';
 import { toast } from '../components/toast';
-import { Avatar, ColumnIcon, Drawer, MenuButton } from '../components/ui';
+import { Avatar, ColumnIcon, Drawer, ItemStatusBadge, MenuButton } from '../components/ui';
+import { tasksOf } from '../domain/hierarchy';
 import { fmtDateTime, fmtDue, fmtRange } from '../domain/dates';
 import { sprintName } from '../domain/sprint';
 import type { ItemType, Severity, WorkItem } from '../domain/types';
@@ -43,6 +44,14 @@ function TaskDetail({ item, onClose }: { item: WorkItem; onClose: () => void }) 
   const [newCrit, setNewCrit] = useState('');
   const [comment, setComment] = useState('');
   const [tab, setTab] = useState<'comments' | 'history'>('comments');
+  const [newTask, setNewTask] = useState('');
+  const allItems = useStore((s) => s.items);
+  const createItem = useStore((s) => s.createItem);
+  const [, setParams] = useSearchParams();
+  const isTask = item.type === 'task';
+  const parent = isTask ? allItems.find((i) => i.id === item.parentId) ?? null : null;
+  const tasks = isTask ? [] : tasksOf(allItems, item.id);
+  const openItem = (id: string) => setParams((p) => { const n = new URLSearchParams(p); n.set('task', id); return n; });
 
   useEffect(() => setTitle(item.title), [item.title]);
   useEffect(() => setDesc(item.description), [item.description]);
@@ -62,6 +71,12 @@ function TaskDetail({ item, onClose }: { item: WorkItem; onClose: () => void }) 
       <div className="row" style={{ height: 56, flexShrink: 0, padding: '0 16px 0 24px', borderBottom: '1px solid var(--border)' }}>
         <span className="muted" style={{ fontSize: 13 }}>{sprint ? sprintName(sprint) : 'Backlog'}</span>
         <Icon name="chevronRight" size={14} color="var(--text-subtle)" />
+        {parent && (
+          <>
+            <button type="button" className="btn-link num" style={{ fontSize: 13 }} onClick={() => openItem(parent.id)}>{parent.key}</button>
+            <Icon name="chevronRight" size={14} color="var(--text-subtle)" />
+          </>
+        )}
         <span className="num" style={{ fontSize: 13, fontWeight: 600 }}>{item.key}</span>
         <span className="grow" />
         <button
@@ -81,35 +96,36 @@ function TaskDetail({ item, onClose }: { item: WorkItem; onClose: () => void }) 
         <MenuButton label="More actions" trigger={<Icon name="more" size={16} />} className="icon-btn bordered">
           {(close) => (
             <>
-              {openSprints.filter((s) => s.id !== item.sprintId).map((s) => (
+              {!isTask && openSprints.filter((s) => s.id !== item.sprintId).map((s) => (
                 <button key={s.id} type="button" role="menuitem" onClick={() => { close(); moveToSprint([item.id], s.id); toast(`${item.key} moved to ${sprintName(s)}.`); }}>
                   <Icon name="arrowRight" size={16} /> Move to {sprintName(s)}
                 </button>
               ))}
-              {item.sprintId && (
+              {!isTask && item.sprintId && (
                 <button type="button" role="menuitem" onClick={() => { close(); moveToSprint([item.id], null); toast(`${item.key} moved to the backlog.`); }}>
                   <Icon name="layers" size={16} /> Move to backlog
                 </button>
               )}
-              <div className="menu-sep" />
+              {!isTask && <div className="menu-sep" />}
               <button
                 type="button"
                 role="menuitem"
                 className="danger"
                 onClick={() => {
                   close();
-                  if (window.confirm(`Delete ${item.key} "${item.title}"? This can't be undone.`)) {
-                    const snapshot = item;
+                  const withTasks = tasks.length ? ` and its ${tasks.length} task${tasks.length > 1 ? 's' : ''}` : '';
+                  if (window.confirm(`Delete ${item.key} "${item.title}"${withTasks}?`)) {
+                    const snapshot = [item, ...tasks];
                     del(item.id);
                     onClose();
                     toast(`${item.key} deleted.`, {
                       label: 'Undo',
-                      run: () => useStore.setState((s) => ({ items: [...s.items, snapshot] })),
+                      run: () => useStore.setState((s) => ({ items: [...s.items, ...snapshot] })),
                     });
                   }
                 }}
               >
-                <Icon name="trash" size={16} /> Delete task
+                <Icon name="trash" size={16} /> {isTask ? 'Delete task' : 'Delete item'}
               </button>
             </>
           )}
@@ -125,17 +141,32 @@ function TaskDetail({ item, onClose }: { item: WorkItem; onClose: () => void }) 
             <label className="sr-only" htmlFor="td-status">Status</label>
             <div className="row" style={{ position: 'relative' }}>
               <span style={{ position: 'absolute', left: 10, display: 'flex', pointerEvents: 'none' }}><ColumnIcon column={column} size={14} /></span>
-              <select id="td-status" className="filter-select" style={{ paddingLeft: 30, height: 32, borderRadius: 999 }} value={column.id} onChange={(e) => set({ statusId: e.target.value })}>
+              <select
+                id="td-status"
+                className="filter-select"
+                style={{ paddingLeft: 30, height: 32, borderRadius: 999 }}
+                value={column.id}
+                disabled={tasks.length > 0}
+                title={tasks.length ? 'Follows its tasks: done when every task is done' : undefined}
+                onChange={(e) => set({ statusId: e.target.value })}
+              >
                 {workflow.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
               </select>
             </div>
-            <label className="sr-only" htmlFor="td-type">Type</label>
-            <select id="td-type" className="filter-select" style={{ height: 32, borderRadius: 999 }} value={item.type} onChange={(e) => {
-              const type = e.target.value as ItemType;
-              set({ type, severity: type === 'bug' ? item.severity ?? 'major' : null });
-            }}>
-              {(Object.keys(TYPE_LABEL) as ItemType[]).map((t) => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}
-            </select>
+            {isTask ? (
+              <span className="task-chip" style={{ fontSize: 12, padding: '4px 10px', borderRadius: 999 }}>Task</span>
+            ) : (
+              <>
+                <label className="sr-only" htmlFor="td-type">Type</label>
+                <select id="td-type" className="filter-select" style={{ height: 32, borderRadius: 999 }} value={item.type} onChange={(e) => {
+                  const type = e.target.value as ItemType;
+                  set({ type, severity: type === 'bug' ? item.severity ?? 'major' : null });
+                }}>
+                  {(['story', 'bug'] as ItemType[]).map((t) => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}
+                </select>
+              </>
+            )}
+            {tasks.length > 0 && <span className="muted" style={{ fontSize: 12 }}>Status follows its tasks</span>}
             {item.type === 'bug' && (
               <>
                 <label className="sr-only" htmlFor="td-sev">Severity</label>
@@ -191,6 +222,21 @@ function TaskDetail({ item, onClose }: { item: WorkItem; onClose: () => void }) 
             <input id="td-due" type="date" className="input input-sm" style={{ width: 170 }} value={item.dueDate ?? ''} onChange={(e) => set({ dueDate: e.target.value || null })} />
             {due && item.status !== 'done' && <span className={`chip-date ${due.tone === 'neutral' ? '' : due.tone}`}>{due.label}</span>}
           </div>
+          {isTask ? (
+            <>
+              <span className="muted">Backlog item</span>
+              {parent ? (
+                <button type="button" className="parent-link" style={{ fontSize: 13 }} onClick={() => openItem(parent.id)}>
+                  <Icon name="layers" size={14} /> <strong className="num">{parent.key}</strong> · <span className="truncate">{parent.title}</span>
+                </button>
+              ) : (
+                <span className="subtle">—</span>
+              )}
+              <span className="muted">Sprint</span>
+              <span>{sprint ? `${sprintName(sprint)} (follows ${parent?.key ?? 'its item'})` : `Backlog (follows ${parent?.key ?? 'its item'})`}</span>
+            </>
+          ) : (
+          <>
           <label className="muted" htmlFor="td-weight">Weight</label>
           <select id="td-weight" className="filter-select" style={{ width: 170 }} value={item.weight ?? ''} onChange={(e) => set({ weight: e.target.value ? Number(e.target.value) : null })}>
             <option value="">Not estimated</option>
@@ -212,7 +258,41 @@ function TaskDetail({ item, onClose }: { item: WorkItem; onClose: () => void }) 
           </div>
           <label className="muted" htmlFor="td-epic">Epic</label>
           <input id="td-epic" className="input input-sm" placeholder="e.g. QRISAN Refund" defaultValue={item.epic} onBlur={(e) => e.target.value !== item.epic && set({ epic: e.target.value.trim() })} />
+          </>
+          )}
         </div>
+
+        {!isTask && (
+          <section className="col" style={{ gap: 10 }} aria-labelledby="td-tasks">
+            <div className="row">
+              <h3 id="td-tasks" style={{ fontSize: 14, fontWeight: 600 }}>Tasks</h3>
+              <span className="muted num" style={{ fontSize: 12 }}>{tasks.filter((t) => t.status === 'done').length} / {tasks.length}</span>
+            </div>
+            {tasks.length === 0 && <p className="muted" style={{ fontSize: 13 }}>Not broken down yet. Add the tasks the team needs to get this item done.</p>}
+            {tasks.map((t) => (
+              <div key={t.id} className="row" style={{ gap: 8, padding: '6px 8px', borderRadius: 8, background: 'var(--surface-muted)' }}>
+                <span className="muted num" style={{ fontSize: 12, fontWeight: 600, width: 64 }}>{t.key}</span>
+                <button type="button" className="task-card-title grow truncate" style={{ fontSize: 13 }} onClick={() => openItem(t.id)}>{t.title}</button>
+                <ItemStatusBadge item={t} />
+                <Avatar member={member(t.assigneeId)} />
+              </div>
+            ))}
+            <form
+              className="row"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!newTask.trim()) return;
+                const t = createItem(item.projectId, { title: newTask, type: 'task', sprintId: item.sprintId, parentId: item.id });
+                toast(`${t.key} added to ${item.key}.`);
+                setNewTask('');
+              }}
+            >
+              <label className="sr-only" htmlFor="td-new-task">New task</label>
+              <input id="td-new-task" className="input input-sm grow" placeholder="Add a task…" value={newTask} onChange={(e) => setNewTask(e.target.value)} />
+              <button type="submit" className="btn btn-secondary btn-md" disabled={!newTask.trim()}>Add</button>
+            </form>
+          </section>
+        )}
 
         <section className="col" style={{ gap: 8, paddingTop: 16, borderTop: '1px solid var(--border-soft)' }}>
           <label htmlFor="td-desc" style={{ fontWeight: 600 }}>Description</label>
@@ -226,7 +306,7 @@ function TaskDetail({ item, onClose }: { item: WorkItem; onClose: () => void }) 
           />
         </section>
 
-        <section className="col" style={{ gap: 10 }}>
+        {!isTask && <section className="col" style={{ gap: 10 }}>
           <div className="row">
             <h3 style={{ fontSize: 14, fontWeight: 600 }}>Acceptance criteria</h3>
             <span className="muted num" style={{ fontSize: 12 }}>{critDone} / {item.criteria.length}</span>
@@ -267,7 +347,7 @@ function TaskDetail({ item, onClose }: { item: WorkItem; onClose: () => void }) 
             <input id="td-crit" className="input input-sm grow" placeholder="Add a criterion and press Enter" value={newCrit} onChange={(e) => setNewCrit(e.target.value)} />
             <button type="submit" className="btn btn-secondary btn-md" disabled={!newCrit.trim()}>Add</button>
           </form>
-        </section>
+        </section>}
 
         <section className="col" style={{ gap: 10 }}>
           <h3 style={{ fontSize: 14, fontWeight: 600 }}>Attachments</h3>

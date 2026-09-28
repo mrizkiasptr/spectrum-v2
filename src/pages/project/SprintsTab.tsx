@@ -52,7 +52,8 @@ export function SprintsTab() {
   const completed = sprints.filter((s) => s.status === 'completed' && inYear(s));
   const setupSprint = sprints.find((s) => s.id === setupId) ?? null;
   const completeSprint = sprints.find((s) => s.id === completeId) ?? null;
-  const scope = (s: Sprint) => items.filter((i) => i.sprintId === s.id);
+  // Backlog items planned in a sprint (their tasks come along).
+  const scope = (s: Sprint) => items.filter((i) => i.sprintId === s.id && i.type !== 'task');
 
   const newSprint = () => {
     const s = createSprint(project.id);
@@ -107,7 +108,7 @@ export function SprintsTab() {
                 </div>
                 <div className="col" style={{ gap: 6 }}>
                   <div className="row num" style={{ justifyContent: 'space-between', fontSize: 12 }}>
-                    <span className="muted">{p.done} / {p.total} tasks</span>
+                    <span className="muted">{p.done} / {p.total} items done</span>
                     <strong>{p.pct}%</strong>
                   </div>
                   <Progress pct={p.pct} label={`${sprintName(s)} progress`} />
@@ -158,7 +159,7 @@ export function SprintsTab() {
                     {s.startDate && <span className="muted">{sprintDaysLabel(s, today, holidays, project.countCollectiveLeave)}</span>}
                   </div>
                   <div className="col" style={{ gap: 2, fontSize: 13 }}>
-                    <span className="num">{count} task{count === 1 ? '' : 's'} · {scope(s).reduce((t, i) => t + (i.weight ?? 0), 0)} weight</span>
+                    <span className="num">{count} item{count === 1 ? '' : 's'} · {scope(s).reduce((t, i) => t + (i.weight ?? 0), 0)} weight</span>
                     <Link to={`/projects/${project.id}/backlog`} style={{ fontSize: 12, fontWeight: 600 }}>Add from backlog</Link>
                   </div>
                   <div className="row" style={{ justifyContent: 'flex-end' }}>
@@ -198,7 +199,7 @@ export function SprintsTab() {
                             className="danger"
                             onClick={() => {
                               close();
-                              if (window.confirm(`Delete ${sprintName(s)}? Its ${count} task${count === 1 ? '' : 's'} will return to the backlog.`)) {
+                              if (window.confirm(`Delete ${sprintName(s)}? Its ${count} backlog item${count === 1 ? '' : 's'} (and their tasks) will return to the backlog.`)) {
                                 deleteSprint(s.id);
                                 toast(`${sprintName(s)} deleted. Tasks moved to the backlog.`);
                               }

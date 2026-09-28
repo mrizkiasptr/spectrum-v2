@@ -1,3 +1,4 @@
+import { normalizeItem } from '../domain/hierarchy';
 import type { Doc, Holiday, Member, Project, RetroItem, Sprint, WorkItem } from '../domain/types';
 
 /** Store lists that live in Supabase, in dependency order (parents first). */
@@ -68,7 +69,8 @@ export function fromRow<C extends Collection>(c: C, r: Row): EntityOf[C] {
       isAdmin: !!r.is_admin,
     } as EntityOf[C];
   }
-  return { ...(r.data as object), id: r.id } as EntityOf[C];
+  const e = { ...(r.data as object), id: r.id } as EntityOf[C];
+  return (c === 'items' ? normalizeItem(e as WorkItem) : e) as EntityOf[C];
 }
 
 /** JSON with sorted keys, so entities compare equal whatever order Postgres returns jsonb keys in. */

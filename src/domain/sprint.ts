@@ -22,7 +22,9 @@ export interface Progress {
   doneWeight: number;
 }
 
-export function progressOf(items: WorkItem[]): Progress {
+/** Progress of backlog items (stories and bugs); tasks roll up into their item and aren't counted twice. */
+export function progressOf(all: WorkItem[]): Progress {
+  const items = all.filter((i) => i.type !== 'task');
   const byStatus: Record<ItemStatus, number> = { todo: 0, in_progress: 0, review: 0, done: 0 };
   let totalWeight = 0;
   let doneWeight = 0;
@@ -95,7 +97,7 @@ export function readiness(sprint: Sprint, items: WorkItem[]): { ready: boolean; 
   const checks: ReadinessCheck[] = [
     { key: 'goal', label: 'Sprint goal', ok: sprint.goal.trim().length > 0 },
     { key: 'dates', label: 'Dates', ok: !!sprint.startDate && !!sprint.endDate },
-    { key: 'items', label: 'At least 1 task', ok: items.some((i) => i.sprintId === sprint.id) },
+    { key: 'items', label: 'At least 1 backlog item', ok: items.some((i) => i.sprintId === sprint.id && i.type !== 'task') },
   ];
   return { ready: checks.every((c) => c.ok), checks };
 }
@@ -142,7 +144,7 @@ export interface BurndownPoint {
 export function burndown(sprint: Sprint, items: WorkItem[], today: ISODate): BurndownPoint[] {
   if (!sprint.startDate || !sprint.endDate) return [];
   const len = lengthInDays(sprint.startDate, sprint.endDate);
-  const scope = items.filter((i) => i.sprintId === sprint.id);
+  const scope = items.filter((i) => i.sprintId === sprint.id && i.type !== 'task');
   const total = scope.reduce((s, i) => s + Math.max(itemWeight(i), 1), 0);
   const points: BurndownPoint[] = [];
   for (let d = 0; d < len; d++) {
@@ -253,7 +255,7 @@ export function attentionFor(
   }
 
   const unestimated = items.filter(
-    (i) => i.projectId === project.id && i.sprintId === null && i.status !== 'done' && i.weight === null,
+    (i) => i.projectId === project.id && i.sprintId === null && i.status !== 'done' && i.weight === null && i.type !== 'task',
   ).length;
   if (unestimated) {
     out.push({

@@ -1,12 +1,13 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Icon } from '../../components/Icon';
 import { toast } from '../../components/toast';
-import { Avatar, Empty, SeverityBadge, TypeBadge } from '../../components/ui';
+import { Avatar, Empty, ItemStatusBadge, SeverityBadge, TypeBadge } from '../../components/ui';
+import { tasksOf } from '../../domain/hierarchy';
 import { isSprintReady, sprintName } from '../../domain/sprint';
 import type { ItemType } from '../../domain/types';
 import { WEIGHTS } from '../../domain/types';
-import { NewItemDialog } from '../../features/dialogs';
+import { NewItemDialog, NewTaskDialog } from '../../features/dialogs';
 import { useProjectItems, useProjectSprints } from '../../store/hooks';
 import { useStore } from '../../store/useStore';
 import { useProjectCtx } from './ProjectLayout';
@@ -26,13 +27,15 @@ export function BacklogTab() {
   const [onlyUnestimated, setOnlyUnestimated] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [adding, setAdding] = useState(false);
+  const [addTaskTo, setAddTaskTo] = useState<string | null>(null);
+  const [open, setOpen] = useState<Record<string, boolean>>({});
 
   const targets = sprints.filter((s) => s.status !== 'completed').sort((a, b) => a.number - b.number);
   const [target, setTarget] = useState<string>('');
   const targetId = target || targets.find((s) => s.status === 'draft')?.id || targets[0]?.id || '';
 
   const backlog = useMemo(
-    () => items.filter((i) => i.sprintId === null && i.status !== 'done').sort((a, b) => a.rank - b.rank),
+    () => items.filter((i) => i.sprintId === null && i.status !== 'done' && i.type !== 'task').sort((a, b) => a.rank - b.rank),
     [items],
   );
   const shown = backlog.filter(
@@ -52,11 +55,11 @@ export function BacklogTab() {
         <div className="col" style={{ gap: 4 }}>
           <h2 style={{ fontSize: 18, fontWeight: 700 }}>Product backlog</h2>
           <p className="muted" style={{ fontSize: 13 }}>
-            {backlog.length} items · {readyCount} sprint-ready ({readyWeight} weight). Order from most to least important.
+            {backlog.length} items · {readyCount} sprint-ready ({readyWeight} weight). Order from most to least important. Tasks go with their item into a sprint.
           </p>
         </div>
         <button type="button" className="btn btn-primary" onClick={() => setAdding(true)}>
-          <Icon name="plus" size={18} /> Add item
+          <Icon name="plus" size={18} /> Add backlog item
         </button>
       </div>
 
@@ -69,7 +72,6 @@ export function BacklogTab() {
         <select id="bl-type" className="filter-select" value={type} onChange={(e) => setType(e.target.value as ItemType | 'all')}>
           <option value="all">Type: All</option>
           <option value="story">Type: Story</option>
-          <option value="task">Type: Task</option>
           <option value="bug">Type: Bug</option>
         </select>
         <label className="check" style={{ fontSize: 13, alignItems: 'center' }}>
@@ -115,7 +117,7 @@ export function BacklogTab() {
 
       {shown.length === 0 ? (
         <Empty icon="layers" title={filtered ? 'No items match the filters' : 'The backlog is empty'}>
-          {filtered ? <span>Try clearing the search or filters.</span> : <span>Add stories, tasks, or bugs the team will work on next.</span>}
+          {filtered ? <span>Try clearing the search or filters.</span> : <span>Add the stories and bugs the team will work on next. Break them into tasks when you refine or plan them.</span>}
         </Empty>
       ) : (
         <div className="table-wrap">
@@ -136,14 +138,18 @@ export function BacklogTab() {
                 <th scope="col">Title</th>
                 <th scope="col" style={{ width: 140 }}>Weight</th>
                 <th scope="col" style={{ width: 130 }}>Readiness</th>
+                <th scope="col" style={{ width: 110 }}>Tasks</th>
                 <th scope="col" style={{ width: 64 }}>Owner</th>
               </tr>
             </thead>
             <tbody>
               {shown.map((i, idx) => {
                 const ready = isSprintReady(i);
+                const tasks = tasksOf(items, i.id);
+                const expanded = !!open[i.id];
                 return (
-                  <tr key={i.id} className="clickable">
+                  <Fragment key={i.id}>
+                  <tr className="clickable">
                     <td>
                       <input
                         type="checkbox"
@@ -193,8 +199,47 @@ export function BacklogTab() {
                         </span>
                       )}
                     </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        aria-expanded={expanded}
+                        aria-label={`${expanded ? 'Hide' : 'Show'} tasks of ${i.key}`}
+                        onClick={() => setOpen((o) => ({ ...o, [i.id]: !expanded }))}
+                        style={{ paddingLeft: 6, color: tasks.length ? 'var(--text-2)' : 'var(--text-muted)' }}
+                      >
+                        <Icon name={expanded ? 'chevronDown' : 'chevronRight'} size={14} /> {tasks.length || 'None'}
+                      </button>
+                    </td>
                     <td><Avatar member={members.find((m) => m.id === i.assigneeId) ?? null} /></td>
                   </tr>
+                  {expanded && tasks.map((t) => (
+                    <tr key={t.id} className="subrow">
+                      <td />
+                      <td />
+                      <td className="muted num">{t.key}</td>
+                      <td colSpan={3}>
+                        <div className="row" style={{ paddingLeft: 12 }}>
+                          <Icon name="chevronRight" size={12} color="var(--text-subtle)" />
+                          <span className="task-chip">Task</span>
+                          <button type="button" className="task-card-title truncate" onClick={() => setParams({ task: t.id })}>{t.title}</button>
+                        </div>
+                      </td>
+                      <td><ItemStatusBadge item={t} /></td>
+                      <td><Avatar member={members.find((m) => m.id === t.assigneeId) ?? null} /></td>
+                    </tr>
+                  ))}
+                  {expanded && (
+                    <tr className="subrow">
+                      <td colSpan={2} />
+                      <td colSpan={6}>
+                        <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--primary-darker)', paddingLeft: 12 }} onClick={() => setAddTaskTo(i.id)}>
+                          <Icon name="plus" size={14} /> {tasks.length ? 'Add task' : 'Break into tasks'}
+                        </button>
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 );
               })}
             </tbody>
@@ -203,6 +248,7 @@ export function BacklogTab() {
       )}
       {filtered && shown.length > 0 && <p className="muted" style={{ fontSize: 12 }}>Clear filters to reorder the backlog.</p>}
       {adding && <NewItemDialog projectId={project.id} sprintId={null} onClose={() => setAdding(false)} />}
+      {addTaskTo && <NewTaskDialog projectId={project.id} sprintId={null} parentId={addTaskTo} onClose={() => setAddTaskTo(null)} />}
     </div>
   );
 }
