@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useOutletContext, useParams } from 'react-router-dom';
+import { ViewOnlyBanner } from '../../components/ViewOnlyBanner';
 import { Topbar } from '../../components/AppShell';
 import { Icon, type IconName } from '../../components/Icon';
 import { toast } from '../../components/toast';
@@ -104,6 +105,7 @@ export function ProjectLayout() {
             ))}
           </nav>
         </div>
+        <ViewOnlyBanner project={project} />
         <Outlet context={{ project } satisfies ProjectCtx} />
       </div>
       <Dialog open={sharing} onClose={() => setSharing(false)} title={`Share ${project.name}`}>

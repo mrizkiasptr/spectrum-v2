@@ -4,7 +4,7 @@ import { useAuth } from './AuthProvider';
 
 /** Sends signed-out visitors to /login and brings them back to where they were going. */
 export function RequireAuth({ children }: { children: ReactNode }) {
-  const { status } = useAuth();
+  const { status, signedOutByUser } = useAuth();
   const location = useLocation();
   if (status === 'loading')
     return (
@@ -12,6 +12,6 @@ export function RequireAuth({ children }: { children: ReactNode }) {
         <span className="row" style={{ gap: 10 }}><span className="spinner" aria-hidden="true" /> Loading SPEctrum…</span>
       </div>
     );
-  if (status === 'signedOut') return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
+  if (status === 'signedOut') return <Navigate to="/login" replace state={signedOutByUser ? undefined : { from: location.pathname + location.search }} />;
   return <>{children}</>;
 }

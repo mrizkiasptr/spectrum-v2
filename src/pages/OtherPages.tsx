@@ -1,3 +1,4 @@
+import { useAuth } from '../auth/AuthProvider';
 import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Topbar } from '../components/AppShell';
@@ -17,6 +18,7 @@ export function HolidayCalendarPage() {
   const holidays = useStore((s) => s.holidays);
   const addHoliday = useStore((s) => s.addHoliday);
   const deleteHoliday = useStore((s) => s.deleteHoliday);
+  const canEdit = useAuth().access.isAdmin;
   const today = useToday();
   const years = [...new Set(holidays.map((h) => h.date.slice(0, 4)))].sort();
   const [year, setYear] = useState(today.slice(0, 4));
@@ -47,7 +49,10 @@ export function HolidayCalendarPage() {
             </div>
           </div>
 
-          <form
+          {!canEdit && (
+            <p className="muted row" style={{ fontSize: 13 }}><Icon name="info" size={16} /> Only admins can change the holiday calendar.</p>
+          )}
+          {canEdit && <form
             className="card row wrap"
             style={{ padding: 16, alignItems: 'flex-end' }}
             onSubmit={(e) => {
@@ -83,7 +88,7 @@ export function HolidayCalendarPage() {
                 {!date ? 'Choose a date.' : !name.trim() ? 'Enter a name.' : 'That date is already in the calendar.'}
               </span>
             )}
-          </form>
+          </form>}
 
           {list.length === 0 ? (
             <Empty icon="calendar" title={`No holidays for ${year} yet`}><span>Add them from the official decree so sprint capacity stays accurate.</span></Empty>
@@ -108,7 +113,7 @@ export function HolidayCalendarPage() {
                       <td style={{ fontWeight: 600 }}>{h.name}</td>
                       <td><span className={`badge sm ${h.kind === 'public' ? 'danger' : 'warning'}`}>{h.kind === 'public' ? 'Public holiday' : 'Collective leave'}</span></td>
                       <td>
-                        <button
+                        {canEdit && <button
                           type="button"
                           className="icon-btn sm"
                           aria-label={`Remove ${h.name}`}
@@ -118,7 +123,7 @@ export function HolidayCalendarPage() {
                           }}
                         >
                           <Icon name="trash" size={16} />
-                        </button>
+                        </button>}
                       </td>
                     </tr>
                   ))}

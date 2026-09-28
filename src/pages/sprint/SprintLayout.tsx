@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useOutletContext, useParams, useSearchParams } from 'react-router-dom';
+import { ViewOnlyBanner } from '../../components/ViewOnlyBanner';
 import { Topbar } from '../../components/AppShell';
 import { Icon, type IconName } from '../../components/Icon';
 import { toast } from '../../components/toast';
@@ -150,6 +151,7 @@ export function SprintLayout() {
             ))}
           </nav>
         </div>
+        <ViewOnlyBanner project={project} />
         <Outlet context={{ project, sprint } satisfies SprintCtx} />
       </div>
       {editing && <SprintSetupDialog sprint={sprint} onClose={() => setEditing(false)} />}

@@ -18,17 +18,42 @@ npm run build
 
 `netlify.toml` configures everything: build command `npm run build`, publish directory `dist`, Node 22, and a catch-all redirect to `index.html` so deep links like `/projects/p-at/sprints/…` work. If the site was created before this file existed, check **Site configuration › Build & deploy** and clear any manually set publish directory (it must be `dist`, not the repo root), then trigger a new deploy.
 
-## Sign-in (Supabase)
+## Team workspace (Supabase)
 
-Sign-in uses **Supabase Auth**: email + password, **Sign in with Microsoft** (Azure provider), and password reset by email. There is no public sign-up — accounts are created by an admin.
+With Supabase connected, SPEctrum is a shared workspace: sign-in with **Supabase Auth** (email + password, **Microsoft** via the Azure provider, password reset) and all board data — projects, sprints, tasks, retro, docs, holidays — lives in Postgres and syncs live between teammates. There is no public sign-up; admins add people.
 
-1. Create a Supabase project. In **SQL Editor**, run `supabase/migrations/0001_profiles.sql` (creates `profiles` with RLS and a trigger that adds a profile for every new user).
-2. **Authentication › URL Configuration**: set *Site URL* to your Netlify URL and add `https://<your-site>/reset-password` and `https://<your-site>/projects` to *Redirect URLs* (plus `http://localhost:5173/**` for local dev).
-3. **Authentication › Users › Add user** to create accounts (email + password). Optional: set `full_name` and `role` in the `profiles` table.
-4. Microsoft: **Authentication › Providers › Azure** — paste the Client ID / Secret of an Entra ID app registration whose redirect URI is `https://<project-ref>.supabase.co/auth/v1/callback`.
-5. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (Project Settings › API) in **Netlify › Site configuration › Environment variables**, or in `.env.local` for local dev (see `.env.example`), then redeploy. Vite reads them at build time.
+### Who can see and change what (Row Level Security)
 
-Without these variables the login page offers **Continue in demo mode** so the site still works. Signed-in people are matched to a board member by name (so demo tasks stay theirs) or added as a new member. Project data still lives in the browser (`localStorage`); moving it to Supabase tables is the next step.
+| Person | Sees | Changes |
+| --- | --- | --- |
+| **Admin** | Everything | Everything, plus people, access, and holidays |
+| **Tribe access** (e.g. Phoenix) | Every project in that tribe, so tribe dashboards work | Can create projects in that tribe; view only on projects they're not a member of |
+| **Project member** (in the project's team) | That project | That project's sprints, tasks, retro, docs, settings |
+| Anyone else signed in | Nothing | Nothing |
+
+Access is enforced in the database, not only in the UI. `supabase/tests/` runs 22 RLS scenarios on plain Postgres (see its README).
+
+### Set up
+
+1. Create a Supabase project. In **SQL Editor**, run `supabase/migrations/0001_profiles.sql`, then `0002_workspace.sql`.
+2. **Authentication › URL Configuration**: set *Site URL* to your Netlify URL; add `https://<your-site>/reset-password` and `https://<your-site>/projects` to *Redirect URLs* (plus `http://localhost:5173/**` for local dev).
+3. **Authentication › Users › Add user** for yourself, then sign in to SPEctrum once (this creates your member row). Make yourself admin in the SQL Editor:
+   ```sql
+   update public.members set is_admin = true where email = 'you@company.com';
+   ```
+4. Sign in again. The empty workspace offers **Import demo projects** or **Create first project**.
+5. **Administration › People & access**: add people by the email they sign in with, pick their tribes, and make admins. They get access on their first sign-in with that email (linked by the verified email, not by name). Put people into project teams from each project.
+6. Microsoft: **Authentication › Providers › Azure** with the Client ID / Secret of an Entra ID app registration whose redirect URI is `https://<project-ref>.supabase.co/auth/v1/callback`.
+7. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (Project Settings › API) in **Netlify › Site configuration › Environment variables**, or in `.env.local` for local dev (see `.env.example`), then redeploy. Vite reads them at build time.
+
+### How sync works
+
+- On sign-in the app loads everything the person may see, then writes their changes back (debounced ~0.4 s, retried with backoff when offline) and applies teammates' changes over **Supabase Realtime**. The top bar shows *Saved / Saving… / Offline / Not saved*.
+- Tables keep the columns access rules need (`id`, `project_id`, `tribe`, `status`, …) plus `data jsonb` with the full entity, so product changes (e.g. custom workflow columns) don't need a migration each time.
+- Conflicts: last write wins per entity (a task, a sprint). A change the database refuses is rolled back to the server copy with a message.
+- Favorites and recently opened stay in the browser, per person.
+
+Without the Supabase variables the login page offers **Continue in demo mode**, and data stays in the browser as before.
 
 ## What's in this module
 
@@ -71,8 +96,13 @@ Other sidebar modules (Squad Health Check, Work Performance, …) show a placeho
 src/
   domain/      types, date & working-day math, sprint rules, seed data (+ unit tests)
   store/       Zustand store with localStorage persistence (+ unit tests)
+  auth/        Supabase Auth provider, route guard, profile → member mapping
+  sync/        Supabase sync engine (load, write-back, realtime) and row mapping (+ tests)
   components/  app shell, sidebar, quick switcher, UI primitives, icons, toasts
   features/    task drawer, sprint setup, complete sprint, dialogs, retro board
   pages/       project board, project tabs, sprint tabs, admin pages
   styles/      SPE Nova tokens and component styles
+supabase/
+  migrations/  SQL to run in Supabase (profiles, workspace tables, RLS, realtime)
+  tests/       RLS scenarios for plain Postgres
 ```

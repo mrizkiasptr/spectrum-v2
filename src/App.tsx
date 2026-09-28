@@ -4,6 +4,7 @@ import { ComingSoon, NotFound } from './pages/misc';
 import { HolidayCalendarPage, MyTasksPage } from './pages/OtherPages';
 import { RequireAuth } from './auth/RequireAuth';
 import { LoginPage, ResetPasswordPage } from './pages/LoginPage';
+import { PeoplePage } from './pages/PeoplePage';
 import { ProjectBoardPage } from './pages/ProjectBoardPage';
 import { TribePage } from './pages/TribePage';
 import { BacklogTab } from './pages/project/BacklogTab';
@@ -60,6 +61,7 @@ export default function App() {
         </Route>
         <Route path="my-tasks" element={<MyTasksPage />} />
         <Route path="admin/holidays" element={<HolidayCalendarPage />} />
+        <Route path="admin/people" element={<PeoplePage />} />
         {LATER.map(([path, title]) => (
           <Route key={path} path={path.slice(1)} element={<ComingSoon title={title} />} />
         ))}

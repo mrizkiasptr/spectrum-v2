@@ -1,3 +1,4 @@
+import { useAuth } from '../auth/AuthProvider';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icon } from '../components/Icon';
@@ -124,12 +125,14 @@ export function CompleteSprintDialog({ sprint, onClose }: { sprint: Sprint; onCl
 /* ---------- New project ---------- */
 
 export function NewProjectDialog({ onClose, tribe }: { onClose: () => void; tribe?: Tribe }) {
+  const { access } = useAuth();
+  const allowed = access.isAdmin ? TRIBES : TRIBES.filter((t) => access.tribes.includes(t));
   const projects = useStore((s) => s.projects);
   const create = useStore((s) => s.createProject);
   const navigate = useNavigate();
   const today = todayISO();
   const [f, setF] = useState({
-    name: '', code: '', key: '', client: '', description: '', tribe: tribe ?? TRIBES[0], startDate: today, endDate: addDays(today, 364),
+    name: '', code: '', key: '', client: '', description: '', tribe: tribe && allowed.includes(tribe) ? tribe : allowed[0] ?? TRIBES[0], startDate: today, endDate: addDays(today, 364),
   });
   const [touched, setTouched] = useState(false);
   const up = (k: keyof typeof f) => (e: { target: { value: string } }) => setF((x) => ({ ...x, [k]: e.target.value }));
@@ -219,7 +222,7 @@ export function NewProjectDialog({ onClose, tribe }: { onClose: () => void; trib
         <div className="field">
           <label className="field-label" htmlFor="np-tribe">Tribe</label>
           <select id="np-tribe" className="input" value={f.tribe} onChange={up('tribe')}>
-            {TRIBES.map((t) => <option key={t}>{t}</option>)}
+            {allowed.map((t) => <option key={t}>{t}</option>)}
           </select>
         </div>
       </div>

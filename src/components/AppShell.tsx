@@ -5,6 +5,7 @@ import { useStore } from '../store/useStore';
 import { TaskDrawerHost } from '../features/TaskDrawer';
 import { Icon, type IconName } from './Icon';
 import { QuickSwitcher } from './QuickSwitcher';
+import { SyncStatus } from './SyncStatus';
 import { TRIBE_STYLE, MenuButton, Avatar } from './ui';
 import { Toasts, toast } from './toast';
 
@@ -91,6 +92,7 @@ function Sidebar({ onSearch }: { onSearch: () => void }) {
         </button>
         {adminOpen && (
           <div className="nav-group" style={{ paddingLeft: collapsed ? 0 : 16 }}>
+            {auth.workspace && auth.access.isAdmin && <NavItem to="/admin/people" icon="users" label="People & access" />}
             <NavItem to="/admin/holidays" icon="calendar" label="Holiday calendar" />
             <NavItem to="/admin/master-data" icon="layers" label="Master Data" />
             <NavItem to="/admin/configuration" icon="sliders" label="Configuration" />
@@ -122,7 +124,7 @@ function Sidebar({ onSearch }: { onSearch: () => void }) {
           <MenuButton label="Account menu" trigger={<Icon name="more" size={18} />} align="right" up>
             {(close) => (
               <>
-                <button
+                {!auth.workspace && <button
                   type="button"
                   role="menuitem"
                   onClick={() => {
@@ -133,7 +135,7 @@ function Sidebar({ onSearch }: { onSearch: () => void }) {
                   }}
                 >
                   <Icon name="refresh" size={16} /> Reset demo data
-                </button>
+                </button>}
                 <button
                   type="button"
                   role="menuitem"
@@ -178,6 +180,7 @@ export function Topbar({ crumbs, actions }: { crumbs: Crumb[]; actions?: ReactNo
         ))}
       </nav>
       <div className="row" style={{ gap: 4 }}>
+        <SyncStatus />
         {actions}
         <a className="btn btn-ghost btn-md" href="mailto:feedback@spectrum.example?subject=SPEctrum%20v2%20feedback">
           <Icon name="message" size={18} /> Feedback

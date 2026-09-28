@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useAuth } from '../auth/AuthProvider';
 import { Topbar } from '../components/AppShell';
 import { HealthBadge, StatTile } from '../components/charts';
 import { Icon } from '../components/Icon';
@@ -18,6 +19,7 @@ export function TribePage() {
   const navigate = useNavigate();
   const insights = useInsights();
   const [creating, setCreating] = useState(false);
+  const { access } = useAuth();
   const tribe = TRIBES.find((t) => t === params.tribe);
   if (!tribe) return <NotFound what="tribe" />;
 
@@ -47,9 +49,11 @@ export function TribePage() {
               <select id="tr-switch" className="filter-select" value={tribe} onChange={(e) => navigate(tribePath(e.target.value as Tribe))}>
                 {TRIBES.map((t) => <option key={t} value={t}>Tribe: {t}</option>)}
               </select>
-              <button type="button" className="btn btn-primary" onClick={() => setCreating(true)}>
-                <Icon name="plus" size={18} /> New project
-              </button>
+              {(access.isAdmin || access.tribes.includes(tribe)) && (
+                <button type="button" className="btn btn-primary" onClick={() => setCreating(true)}>
+                  <Icon name="plus" size={18} /> New project
+                </button>
+              )}
             </div>
           </div>
           <div className="grid-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>

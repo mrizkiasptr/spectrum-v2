@@ -30,10 +30,10 @@ const HEALTH_DOT: Record<Health, string> = {
 };
 
 /** Project Board landing: one card per tribe with its health and running projects. Opens the tribe page. */
-export function TribeCards({ insights }: { insights: ProjectInsight[] }) {
+export function TribeCards({ insights, tribes = TRIBES }: { insights: ProjectInsight[]; tribes?: readonly Tribe[] }) {
   return (
     <div className="grid-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
-      {TRIBES.map((t) => {
+      {tribes.map((t) => {
         const all = insights.filter((i) => i.project.tribe === t);
         const list = all.filter((i) => i.project.status === 'active');
         const s = summarize(list);

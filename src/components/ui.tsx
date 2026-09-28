@@ -1,3 +1,4 @@
+import { initialsOf } from '../auth/profile';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import type { GoalOutcome, ItemStatus, ItemType, Member, Severity, SprintStatus, Tribe, WorkflowStatus, WorkItem } from '../domain/types';
 import { columnOf, defaultWorkflow } from '../domain/workflow';
@@ -16,7 +17,7 @@ export function Avatar({ member, size, title }: { member: Member | null; size?: 
   }
   return (
     <span className={`avatar ${member.id === me ? 'me' : ''} ${size ?? ''}`} title={member.name} aria-label={member.name}>
-      {member.initials}
+      {member.initials || initialsOf(member.name)}
     </span>
   );
 }

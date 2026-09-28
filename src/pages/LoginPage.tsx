@@ -74,7 +74,6 @@ export function PasswordInput({
 export function LoginPage() {
   const auth = useAuth();
   const location = useLocation();
-  const navigate = useNavigate();
   const from = (location.state as { from?: string } | null)?.from ?? '/projects';
   const [view, setView] = useState<'signin' | 'forgot'>('signin');
 
@@ -83,7 +82,7 @@ export function LoginPage() {
   return (
     <AuthLayout>
       {view === 'signin' ? (
-        <SignInForm onForgot={() => setView('forgot')} onDone={() => navigate(from, { replace: true })} />
+        <SignInForm onForgot={() => setView('forgot')} />
       ) : (
         <ForgotForm onBack={() => setView('signin')} />
       )}
@@ -91,7 +90,7 @@ export function LoginPage() {
   );
 }
 
-function SignInForm({ onForgot, onDone }: { onForgot: () => void; onDone: () => void }) {
+function SignInForm({ onForgot }: { onForgot: () => void }) {
   const auth = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -113,9 +112,11 @@ function SignInForm({ onForgot, onDone }: { onForgot: () => void; onDone: () => 
     if (emailErr || passErr) return;
     setBusy('password');
     const err = await auth.signInWithPassword(email, password);
-    setBusy(null);
-    if (err) setError(err);
-    else onDone();
+    // On success keep the spinner: the page moves on once the workspace has loaded.
+    if (err) {
+      setBusy(null);
+      setError(err);
+    }
   };
 
   const microsoft = async () => {
@@ -141,7 +142,7 @@ function SignInForm({ onForgot, onDone }: { onForgot: () => void; onDone: () => 
           <Icon name="info" size={18} />
           <div className="col" style={{ gap: 6 }}>
             <span>Sign-in isn’t connected to Supabase on this site yet. You can explore SPEctrum with demo data.</span>
-            <button type="button" className="btn-link" style={{ alignSelf: 'flex-start' }} onClick={() => { auth.enterDemo(); toast('You’re in demo mode. Data stays in this browser.'); onDone(); }}>
+            <button type="button" className="btn-link" style={{ alignSelf: 'flex-start' }} onClick={() => { auth.enterDemo(); toast('You’re in demo mode. Data stays in this browser.'); }}>
               Continue in demo mode
             </button>
           </div>

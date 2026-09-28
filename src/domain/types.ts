@@ -9,6 +9,10 @@ export interface Member {
   name: string;
   initials: string;
   role: string;
+  /** Workspace fields (Supabase): sign-in email, linked auth user, admin flag. */
+  email?: string | null;
+  userId?: string | null;
+  isAdmin?: boolean;
 }
 
 export type ProjectStatus = 'active' | 'completed';
