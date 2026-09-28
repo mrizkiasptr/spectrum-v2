@@ -33,6 +33,28 @@ function MicrosoftLogo() {
   );
 }
 
+/**
+ * Whether a sign-in provider is switched on in Supabase (Authentication › Providers), so the page
+ * never offers a button that can only fail. Hidden until known; shown if the check itself fails.
+ */
+function useProviderEnabled(provider: string): boolean {
+  const [enabled, setEnabled] = useState(false);
+  useEffect(() => {
+    const url = import.meta.env.VITE_SUPABASE_URL?.trim();
+    const key = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
+    if (!url || !key) return;
+    let alive = true;
+    fetch(`${url}/auth/v1/settings`, { headers: { apikey: key } })
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((s: { external?: Record<string, boolean> }) => alive && setEnabled(!!s.external?.[provider]))
+      .catch(() => alive && setEnabled(true));
+    return () => {
+      alive = false;
+    };
+  }, [provider]);
+  return enabled;
+}
+
 export function PasswordInput({
   id,
   value,
@@ -99,6 +121,7 @@ function SignInForm({ onForgot }: { onForgot: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [caps, setCaps] = useState(false);
   const emailRef = useRef<HTMLInputElement>(null);
+  const microsoftEnabled = useProviderEnabled('azure');
 
   useEffect(() => emailRef.current?.focus(), []);
 
@@ -150,12 +173,15 @@ function SignInForm({ onForgot }: { onForgot: () => void }) {
       )}
 
       <form className="auth-form" onSubmit={submit} noValidate>
-        <button type="button" className="auth-sso" onClick={microsoft} disabled={busy !== null} aria-busy={busy === 'microsoft'}>
-          {busy === 'microsoft' ? <span className="spinner" aria-hidden="true" /> : <MicrosoftLogo />}
-          {busy === 'microsoft' ? 'Redirecting to Microsoft…' : 'Sign in with Microsoft'}
-        </button>
-
-        <div className="auth-divider"><span>or sign in with email</span></div>
+        {microsoftEnabled && (
+          <>
+            <button type="button" className="auth-sso" onClick={microsoft} disabled={busy !== null} aria-busy={busy === 'microsoft'}>
+              {busy === 'microsoft' ? <span className="spinner" aria-hidden="true" /> : <MicrosoftLogo />}
+              {busy === 'microsoft' ? 'Redirecting to Microsoft…' : 'Sign in with Microsoft'}
+            </button>
+            <div className="auth-divider"><span>or sign in with email</span></div>
+          </>
+        )}
 
         {error && (
           <div className="auth-error" role="alert">
