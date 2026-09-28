@@ -138,117 +138,105 @@ export function SprintBoard() {
     },
   });
 
+  const cardMenu = (i: WorkItem, column: WorkflowStatus) =>
+    !readOnly && (
+      <MenuButton label={`Actions for ${i.key}`} trigger={<Icon name="more" size={16} />} className="icon-btn sm card-menu">
+        {(close) => (
+          <>
+            <button type="button" role="menuitem" onClick={() => { close(); openTask(i.id); }}>
+              <Icon name="external" size={16} /> Open details
+            </button>
+            {i.type !== 'task' && (
+              <button type="button" role="menuitem" onClick={() => { close(); setAddTask({ parentId: i.id }); }}>
+                <Icon name="plus" size={16} /> Break into tasks
+              </button>
+            )}
+            <div className="menu-sep" />
+            {workflow.filter((w) => w.id !== column.id).map((w) => (
+              <button key={w.id} type="button" role="menuitem" onClick={() => { close(); move(i, w); }}>
+                <ColumnIcon column={w} size={14} /> Move to {w.name}
+              </button>
+            ))}
+            {i.assigneeId !== me && (
+              <>
+                <div className="menu-sep" />
+                <button type="button" role="menuitem" onClick={() => { close(); updateItem(i.id, { assigneeId: me }); toast(`${i.key} assigned to you.`); }}>
+                  <Icon name="userPlus" size={16} /> Assign to me
+                </button>
+              </>
+            )}
+          </>
+        )}
+      </MenuButton>
+    );
+
+  const dragProps = (i: WorkItem) => ({
+    draggable: !readOnly,
+    onDragStart: (e: DragEvent) => {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', i.id);
+      // Defer the re-render: changing the dragged element synchronously can cancel the drag in Chromium.
+      setTimeout(() => setDragId(i.id), 0);
+    },
+    onDragEnd: () => {
+      setDragId(null);
+      setOver(null);
+    },
+  });
+
+  /** Compact card: key, title, then one meta row (due, weight for items, assignee). */
   const renderCard = (i: WorkItem, column: WorkflowStatus, showParent: boolean) => {
     const due = i.dueDate && i.status !== 'done' ? fmtDue(i.dueDate, today) : null;
     const assignee = members.find((m) => m.id === i.assigneeId) ?? null;
     const isTask = i.type === 'task';
     const parent = isTask ? scope.find((x) => x.id === i.parentId) : null;
-    const critDone = i.criteria.filter((c) => c.done).length;
     return (
       <article
         key={i.id}
-        className={`task-card ${dragId === i.id ? 'dragging' : ''} ${isTask ? 'is-task' : ''}`}
-        draggable={!readOnly}
-        onDragStart={(e) => {
-          e.dataTransfer.effectAllowed = 'move';
-          e.dataTransfer.setData('text/plain', i.id);
-          // Defer the re-render: changing the dragged element synchronously can cancel the drag in Chromium.
-          setTimeout(() => setDragId(i.id), 0);
-        }}
-        onDragEnd={() => {
-          setDragId(null);
-          setOver(null);
-        }}
+        className={`kcard ${dragId === i.id ? 'dragging' : ''} ${isTask ? '' : 'is-item'}`}
+        {...dragProps(i)}
         aria-label={`${i.key} ${i.title}, ${column.name}`}
       >
-        <div className="col" style={{ padding: isTask ? '10px 12px 8px' : '12px 12px 10px', gap: isTask ? 6 : 8 }}>
-          <div className="row" style={{ fontSize: 12 }}>
-            <span className="muted num" style={{ fontWeight: 600 }}>{i.key}</span>
-            {isTask ? <span className="task-chip">Task</span> : <TypeBadge type={i.type} />}
-            {i.severity && i.severity !== 'minor' && <SeverityBadge severity={i.severity} />}
-            <span className="grow" />
-            {!readOnly && (
-              <MenuButton label={`Actions for ${i.key}`} trigger={<Icon name="more" size={16} />}>
-                {(close) => (
-                  <>
-                    <button type="button" role="menuitem" onClick={() => { close(); openTask(i.id); }}>
-                      <Icon name="external" size={16} /> Open details
-                    </button>
-                    {!isTask && (
-                      <button type="button" role="menuitem" onClick={() => { close(); setAddTask({ parentId: i.id }); }}>
-                        <Icon name="plus" size={16} /> Break into tasks
-                      </button>
-                    )}
-                    <div className="menu-sep" />
-                    {workflow.filter((w) => w.id !== column.id).map((w) => (
-                      <button key={w.id} type="button" role="menuitem" onClick={() => { close(); move(i, w); }}>
-                        <ColumnIcon column={w} size={14} /> Move to {w.name}
-                      </button>
-                    ))}
-                    {i.assigneeId !== me && (
-                      <>
-                        <div className="menu-sep" />
-                        <button type="button" role="menuitem" onClick={() => { close(); updateItem(i.id, { assigneeId: me }); toast(`${i.key} assigned to you.`); }}>
-                          <Icon name="userPlus" size={16} /> Assign to me
-                        </button>
-                      </>
-                    )}
-                  </>
-                )}
-              </MenuButton>
-            )}
-          </div>
-          <button type="button" className="task-card-title" onClick={() => openTask(i.id)}>{i.title}</button>
-          {showParent && parent && (
-            <button type="button" className="parent-link truncate" onClick={() => openTask(parent.id)} title={`${parent.key} ${parent.title}`}>
-              <Icon name="layers" size={12} /> {parent.key} · {parent.title}
-            </button>
-          )}
-          {!isTask && i.description && (
-            <span className="muted" style={{ fontSize: 12, lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-              {i.description}
-            </span>
-          )}
-          {(due || !isTask) && (
-            <div className="row" style={{ fontSize: 12 }}>
-              {due && (
-                <span className={`chip-date ${due.tone === 'neutral' ? '' : due.tone}`}>
-                  <Icon name="calendar" size={13} /> {due.label}
-                </span>
-              )}
-              <span className="grow" />
-              {!isTask && (
-                <span className="row num" style={{ gap: 4, fontWeight: 600, color: i.weight === null ? 'var(--warning-text)' : 'var(--text-2)' }}>
-                  <Icon name="weight" size={13} color="var(--text-muted)" />
-                  {i.weight === null ? 'No weight' : `Weight ${i.weight}`}
-                </span>
-              )}
-            </div>
-          )}
-        </div>
-        <div className="row" style={{ gap: 12, padding: '6px 12px', borderTop: '1px solid var(--border-soft)', fontSize: 12, color: 'var(--text-muted)' }}>
-          <Avatar member={assignee} />
+        <div className="kcard-top">
+          <span className="kcard-key num">{i.key}</span>
+          {!isTask && <TypeBadge type={i.type} />}
+          {i.severity && i.severity !== 'minor' && <SeverityBadge severity={i.severity} />}
           <span className="grow" />
-          {i.criteria.length > 0 && (
-            <span className="row num" style={{ gap: 4 }} title="Acceptance criteria done">
-              <Icon name="checkCircle" size={14} /> {critDone}/{i.criteria.length}
+          {cardMenu(i, column)}
+        </div>
+        <button type="button" className="kcard-title" onClick={() => openTask(i.id)}>{i.title}</button>
+        {showParent && parent && (
+          <button type="button" className="parent-link truncate" onClick={() => openTask(parent.id)} title={`${parent.key} ${parent.title}`}>
+            <Icon name="layers" size={12} /> {parent.key} · {parent.title}
+          </button>
+        )}
+        <div className="kcard-meta">
+          {due && (
+            <span className={`chip-date ${due.tone === 'neutral' ? '' : due.tone}`}>
+              <Icon name="calendar" size={12} /> {due.label}
             </span>
           )}
-          {i.comments.length > 0 && <span className="row num" style={{ gap: 4 }} title="Comments"><Icon name="message" size={14} /> {i.comments.length}</span>}
-          {i.attachments.length > 0 && <span className="row num" style={{ gap: 4 }} title="Attachments"><Icon name="paperclip" size={14} /> {i.attachments.length}</span>}
+          {!isTask && (
+            <span className="row num" style={{ gap: 3, color: i.weight === null ? 'var(--warning-text)' : 'var(--text-muted)' }} title="Weight">
+              <Icon name="weight" size={12} /> {i.weight ?? '—'}
+            </span>
+          )}
+          {i.comments.length > 0 && <span className="row num muted" style={{ gap: 3 }} title="Comments"><Icon name="message" size={12} /> {i.comments.length}</span>}
+          <span className="grow" />
+          <Avatar member={assignee} />
         </div>
       </article>
     );
   };
 
   const columnHead = (column: WorkflowStatus, colIdx: number, count: number) => (
-    <div className="column-head" style={{ alignItems: 'flex-start' }} title="Drag cards between columns, or use the card menu">
+    <div className="khead" title={column.name}>
       <ColumnIcon column={column} />
-      <h2 id={`col-${column.id}`} style={{ fontSize: 14, fontWeight: 600, minWidth: 0, overflowWrap: 'break-word', hyphens: 'auto', lineHeight: 1.3 }}>{column.name}</h2>
+      <h2 id={`col-${column.id}`} className="khead-name">{column.name}</h2>
       <span className="count-pill num">{count}</span>
       <span className="grow" />
       {!readOnly && (
-        <>
+        <span className="khead-actions">
           <button type="button" className="icon-btn sm" aria-label={`Add task to ${column.name}`} onClick={() => setAddTask({ statusId: column.id })}>
             <Icon name="plus" size={16} />
           </button>
@@ -267,62 +255,82 @@ export function SprintBoard() {
               </>
             )}
           </MenuButton>
-        </>
+        </span>
       )}
     </div>
   );
 
   const laneCards = lanes.flatMap((l) => l.cards);
-  const gridCols = `minmax(240px, 280px) repeat(${workflow.length}, minmax(236px, 1fr))`;
+  const gridCols = `var(--lane-w) repeat(${workflow.length}, minmax(var(--col-min), 1fr))`;
+  const allCollapsed = lanes.length > 0 && lanes.every((l) => collapsed[l.item.id] ?? l.item.status === 'done');
 
   return (
-    <div className="page" style={{ paddingTop: 16 }}>
-      <div className="row wrap" style={{ gap: 10 }}>
-        <label className="search-box">
-          <Icon name="search" size={16} />
-          <input type="search" aria-label="Search tasks and backlog items" placeholder="Search by title or ID" value={q} onChange={(e) => setQ(e.target.value)} />
-        </label>
-        <button
-          type="button"
-          className="btn btn-secondary btn-md"
-          aria-pressed={mine}
-          onClick={() => setMine(!mine)}
-          style={mine ? { borderColor: 'var(--primary)', background: 'var(--primary-subtle)', color: 'var(--primary-darker)' } : undefined}
-        >
-          <Avatar member={members.find((m) => m.id === me) ?? null} /> Only my tasks
-        </button>
-        <label className="sr-only" htmlFor="sb-type">Backlog item type</label>
-        <select id="sb-type" className="filter-select" value={type} onChange={(e) => setType(e.target.value as ItemType | 'all')}>
-          <option value="all">Items: All</option>
-          <option value="story">Items: Stories</option>
-          <option value="bug">Items: Bugs</option>
-        </select>
-        <div className="seg" role="radiogroup" aria-label="Board layout">
-          <button type="button" role="radio" aria-checked={view === 'lanes'} onClick={() => setView('lanes')}>By backlog item</button>
-          <button type="button" role="radio" aria-checked={view === 'flat'} onClick={() => setView('flat')}>Columns only</button>
+    <div className="page" style={{ paddingTop: 16, gap: 14 }}>
+      <div className="board-toolbar">
+        <div className="row wrap" style={{ gap: 8 }}>
+          <label className="search-box" style={{ width: 220 }}>
+            <Icon name="search" size={16} />
+            <input type="search" aria-label="Search tasks and backlog items" placeholder="Search title or ID" value={q} onChange={(e) => setQ(e.target.value)} />
+          </label>
+          <button
+            type="button"
+            className="btn btn-secondary btn-md"
+            aria-pressed={mine}
+            onClick={() => setMine(!mine)}
+            style={mine ? { borderColor: 'var(--primary)', background: 'var(--primary-subtle)', color: 'var(--primary-darker)' } : undefined}
+          >
+            <Avatar member={members.find((m) => m.id === me) ?? null} /> My tasks
+          </button>
+          <label className="sr-only" htmlFor="sb-type">Backlog item type</label>
+          <select id="sb-type" className="filter-select" value={type} onChange={(e) => setType(e.target.value as ItemType | 'all')}>
+            <option value="all">All items</option>
+            <option value="story">Stories</option>
+            <option value="bug">Bugs</option>
+          </select>
+          <div className="seg" role="radiogroup" aria-label="Board layout">
+            <button type="button" role="radio" aria-checked={view === 'lanes'} onClick={() => setView('lanes')} title="One row per backlog item">By item</button>
+            <button type="button" role="radio" aria-checked={view === 'flat'} onClick={() => setView('flat')} title="All cards per column">Columns</button>
+          </div>
         </div>
-        <span className="grow" />
         {!readOnly && (
-          <>
-            <button type="button" className="btn btn-secondary btn-md" onClick={() => setEditingColumns(true)}>
-              <Icon name="sliders" size={16} /> Edit columns
-            </button>
+          <div className="row" style={{ gap: 8 }}>
             <button type="button" className="btn btn-secondary btn-md" onClick={() => setAddItem(true)}>
-              <Icon name="layers" size={16} /> Add backlog item
+              <Icon name="layers" size={16} /> Add item
             </button>
             <button type="button" className="btn btn-primary btn-md" onClick={() => setAddTask({ statusId: firstOfCategory(workflow, 'todo').id })}>
               <Icon name="plus" size={16} /> Add task
             </button>
-          </>
+            <MenuButton label="Board options" trigger={<Icon name="more" size={18} />} className="icon-btn bordered" align="right">
+              {(close) => (
+                <>
+                  <button type="button" role="menuitem" onClick={() => { close(); setEditingColumns(true); }}>
+                    <Icon name="sliders" size={16} /> Edit columns
+                  </button>
+                  {view === 'lanes' && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        close();
+                        setCollapsed(Object.fromEntries(lanes.map((l) => [l.item.id, !allCollapsed])));
+                      }}
+                    >
+                      <Icon name={allCollapsed ? 'chevronDown' : 'chevronUp'} size={16} /> {allCollapsed ? 'Expand all rows' : 'Collapse all rows'}
+                    </button>
+                  )}
+                </>
+              )}
+            </MenuButton>
+          </div>
         )}
       </div>
 
       {view === 'lanes' ? (
         <div className="taskboard" role="table" aria-label="Sprint taskboard" style={{ gridTemplateColumns: gridCols }}>
-          <div className="tb-head tb-sticky" role="columnheader">
-            <div className="column-head">
+          <div className="tb-head tb-corner" role="columnheader">
+            <div className="khead">
               <Icon name="layers" size={16} />
-              <h2 style={{ fontSize: 14, fontWeight: 600 }}>Backlog item</h2>
+              <h2 className="khead-name">Backlog item</h2>
               <span className="count-pill num">{lanes.length}</span>
             </div>
           </div>
@@ -333,7 +341,7 @@ export function SprintBoard() {
           ))}
 
           {lanes.length === 0 && (
-            <div className="tb-empty" style={{ gridColumn: `1 / span ${workflow.length + 1}` }}>
+            <div className="tb-empty" style={{ gridColumn: '1 / -1' }}>
               {scope.some((i) => i.type !== 'task')
                 ? 'Nothing matches these filters.'
                 : 'No backlog items in this sprint yet. Plan stories or bugs from the Backlog, then break them into tasks here.'}
@@ -344,10 +352,11 @@ export function SprintBoard() {
             const isCollapsed = collapsed[item.id] ?? item.status === 'done';
             const doneTasks = tasks.filter((t) => t.status === 'done').length;
             const owner = members.find((m) => m.id === item.assigneeId) ?? null;
+            const pct = tasks.length ? (doneTasks / tasks.length) * 100 : item.status === 'done' ? 100 : 0;
             return (
-              <div key={item.id} className="tb-lane" role="row">
-                <div className={`tb-lane-head tb-sticky ${isCollapsed ? 'collapsed' : ''}`} role="rowheader">
-                  <div className="row" style={{ gap: 6, fontSize: 12 }}>
+              <div key={item.id} className={`tb-lane ${isCollapsed ? 'collapsed' : ''}`} role="row">
+                <div className="tb-lane-head" role="rowheader">
+                  <div className="row" style={{ gap: 6 }}>
                     <button
                       type="button"
                       className="icon-btn sm"
@@ -357,43 +366,40 @@ export function SprintBoard() {
                     >
                       <Icon name={isCollapsed ? 'chevronRight' : 'chevronDown'} size={14} />
                     </button>
-                    <span className="muted num" style={{ fontWeight: 600 }}>{item.key}</span>
+                    <span className="kcard-key num">{item.key}</span>
                     <TypeBadge type={item.type} />
                     {item.severity && item.severity !== 'minor' && <SeverityBadge severity={item.severity} />}
-                  </div>
-                  <button type="button" className="task-card-title" style={{ fontSize: 14 }} onClick={() => openTask(item.id)}>{item.title}</button>
-                  <div className="row wrap" style={{ gap: 8, fontSize: 12 }}>
-                    <ItemStatusBadge item={item} />
-                    <span className="row num muted" style={{ gap: 4 }}>
-                      <Icon name="weight" size={13} /> {item.weight ?? '—'}
-                    </span>
-                    {tasks.length > 0 && (
-                      <span className="row num muted" style={{ gap: 4 }} title="Tasks done">
-                        <Icon name="checkCircle" size={13} /> {doneTasks}/{tasks.length} tasks
-                      </span>
-                    )}
                     <span className="grow" />
-                    <Avatar member={owner} title={owner ? `Owner: ${owner.name}` : 'No owner'} />
+                    {!readOnly && (
+                      <button type="button" className="icon-btn sm" aria-label={`Add task to ${item.key}`} title="Add task" onClick={() => setAddTask({ parentId: item.id })}>
+                        <Icon name="plus" size={16} />
+                      </button>
+                    )}
                   </div>
-                  {tasks.length > 0 && (
-                    <div className="tb-progress" aria-hidden="true"><span style={{ width: `${(doneTasks / tasks.length) * 100}%` }} /></div>
-                  )}
-                  {!readOnly && !isCollapsed && (
-                    <button type="button" className="btn btn-ghost btn-sm" style={{ justifyContent: 'flex-start', color: 'var(--primary-darker)', paddingLeft: 4 }} onClick={() => setAddTask({ parentId: item.id })}>
-                      <Icon name="plus" size={14} /> {tasks.length ? 'Add task' : 'Break into tasks'}
-                    </button>
+                  <button type="button" className="kcard-title tb-lane-title" onClick={() => openTask(item.id)} title={item.title}>{item.title}</button>
+                  {!isCollapsed && (
+                    <>
+                      <div className="tb-lane-meta">
+                        <ItemStatusBadge item={item} />
+                        <span className="row num muted" style={{ gap: 3 }} title="Weight"><Icon name="weight" size={12} /> {item.weight ?? '—'}</span>
+                        <span className="grow" />
+                        <Avatar member={owner} title={owner ? `Owner: ${owner.name}` : 'No owner'} />
+                      </div>
+                      <div className="tb-lane-progress" title={tasks.length ? `${doneTasks} of ${tasks.length} tasks done` : 'Not broken into tasks yet'}>
+                        <div className="tb-progress"><span style={{ width: `${pct}%` }} /></div>
+                        <span className="num">{tasks.length ? `${doneTasks}/${tasks.length}` : 'No tasks'}</span>
+                      </div>
+                    </>
                   )}
                 </div>
                 {workflow.map((column) => {
                   const zone = `${item.id}:${column.id}`;
                   const cellCards = cards.filter((c) => columnOf(workflow, c).id === column.id);
                   return (
-                    <div key={column.id} role="cell" className={`tb-cell ${over === zone ? 'drop' : ''} ${isCollapsed ? 'collapsed' : ''}`} {...dropZone(zone, column, item.id)}>
-                      {isCollapsed ? (
-                        cellCards.length > 0 && <span className="muted num" style={{ fontSize: 12 }}>{cellCards.length}</span>
-                      ) : (
-                        cellCards.map((c) => renderCard(c, column, false))
-                      )}
+                    <div key={column.id} role="cell" className={`tb-cell ${over === zone ? 'drop' : ''}`} {...dropZone(zone, column, item.id)}>
+                      {isCollapsed
+                        ? cellCards.length > 0 && <span className="tb-count num">{cellCards.length}</span>
+                        : cellCards.map((c) => renderCard(c, column, false))}
                     </div>
                   );
                 })}
@@ -402,7 +408,7 @@ export function SprintBoard() {
           })}
         </div>
       ) : (
-        <div className="board" style={{ overflowX: 'auto', gridTemplateColumns: `repeat(${workflow.length}, minmax(260px, 1fr))` }}>
+        <div className="board kboard" style={{ gridTemplateColumns: `repeat(${workflow.length}, minmax(var(--col-min), 1fr))` }}>
           {workflow.map((column, colIdx) => {
             const isDone = column.category === 'done';
             const col = flatCards
@@ -412,20 +418,11 @@ export function SprintBoard() {
             return (
               <section key={column.id} className={`column ${over === column.id ? 'drop' : ''}`} aria-labelledby={`col-${column.id}`} {...dropZone(column.id, column)}>
                 {columnHead(column, colIdx, col.length)}
-                {col.length === 0 && (
-                  <div className="muted" style={{ fontSize: 12, padding: '16px 8px', textAlign: 'center', border: '1px dashed var(--border-strong)', borderRadius: 8 }}>
-                    {dragId ? 'Drop here' : 'No tasks'}
-                  </div>
-                )}
+                {col.length === 0 && <div className="tb-empty-cell">{dragId ? 'Drop here' : 'No tasks'}</div>}
                 {limited.map((i) => renderCard(i, column, true))}
                 {isDone && col.length > DONE_PREVIEW && (
                   <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--primary-darker)', justifyContent: 'flex-start' }} onClick={() => setShowAllDone((v) => !v)}>
                     {showAllDone ? 'Show fewer' : `Show ${col.length - DONE_PREVIEW} more done`}
-                  </button>
-                )}
-                {!readOnly && (
-                  <button type="button" className="btn btn-ghost btn-sm" style={{ justifyContent: 'flex-start', color: 'var(--text-muted)' }} onClick={() => setAddTask({ statusId: column.id })}>
-                    <Icon name="plus" size={16} /> Add task
                   </button>
                 )}
               </section>

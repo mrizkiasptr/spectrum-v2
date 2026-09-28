@@ -80,8 +80,8 @@ export function SprintLayout() {
       />
       <div className="content">
         <div className="project-head" style={{ paddingTop: 18, gap: 12 }}>
-          <div className="row" style={{ alignItems: 'flex-start', gap: 20 }}>
-            <div className="col grow" style={{ gap: 6 }}>
+          <div className="sprint-head">
+            <div className="col grow" style={{ gap: 6, minWidth: 0 }}>
               <div className="row wrap">
                 <h1 style={{ fontSize: 22, fontWeight: 700 }}>{sprintName(sprint)}</h1>
                 <SprintStatusBadge status={sprint.status} />
@@ -106,6 +106,7 @@ export function SprintLayout() {
                 )}
               </div>
             </div>
+            <div className="sprint-head-side">
             <div className="col" style={{ width: 200, gap: 6, paddingTop: 4 }}>
               <div className="row num" style={{ justifyContent: 'space-between', fontSize: 12 }}>
                 <span className="muted">{p.done} / {p.total} items done</span>
@@ -113,6 +114,7 @@ export function SprintLayout() {
               </div>
               <Progress pct={p.pct} label="Sprint progress" />
             </div>
+            <div className="row" style={{ gap: 8 }}>
             {sprint.status !== 'completed' && (
               <button type="button" className="btn btn-secondary btn-md" onClick={() => setEditing(true)}>
                 <Icon name="pen" size={16} /> Edit
@@ -135,6 +137,8 @@ export function SprintLayout() {
                 Start sprint
               </button>
             )}
+            </div>
+            </div>
           </div>
           {sprint.status === 'draft' && blocker && (
             <div className="alert warning" style={{ marginBottom: 4 }}>
