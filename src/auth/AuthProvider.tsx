@@ -247,8 +247,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signedOutByUser,
       importDemoData() {
         if (!engine.current || !access.isAdmin) return;
-        const seed = createSeed(todayISO());
         const s = useStore.getState();
+        // The demo's "current user" becomes the admin importing it, so their tasks and projects are theirs.
+        const raw = createSeed(todayISO());
+        const seed = JSON.parse(JSON.stringify(raw).split(JSON.stringify(raw.currentUserId)).join(JSON.stringify(s.currentUserId))) as typeof raw;
         useStore.setState({
           members: [...s.members, ...seed.members.filter((m) => !s.members.some((x) => x.id === m.id))],
           projects: seed.projects,

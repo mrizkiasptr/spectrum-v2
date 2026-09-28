@@ -35,16 +35,19 @@ Access is enforced in the database, not only in the UI. `supabase/tests/` runs 2
 
 ### Set up
 
-1. Create a Supabase project. In **SQL Editor**, run `supabase/migrations/0001_profiles.sql`, then `0002_workspace.sql`.
+> This repo is already connected to the Supabase project `uomajehbtzzaxkygecam` (see `.env.production`; the publishable key is public by design). Migrations 0001–0004 are applied there and `mrizkia10@gmail.com` is pre-registered as admin. The steps below are for a new project.
+
+1. Create a Supabase project. In **SQL Editor**, run the files in `supabase/migrations/` in order (0001 → 0004).
 2. **Authentication › URL Configuration**: set *Site URL* to your Netlify URL; add `https://<your-site>/reset-password` and `https://<your-site>/projects` to *Redirect URLs* (plus `http://localhost:5173/**` for local dev).
-3. **Authentication › Users › Add user** for yourself, then sign in to SPEctrum once (this creates your member row). Make yourself admin in the SQL Editor:
+3. **Authentication › Sign In / Providers**: turn off *Allow new users to sign up* (accounts are created by admins) and, on paid plans, turn on *Leaked password protection*.
+4. **Authentication › Users › Add user** (tick *Auto Confirm User*) for yourself and sign in. The first person to sign in while there's no admin becomes admin; to pin it to one email instead, pre-register them:
    ```sql
-   update public.members set is_admin = true where email = 'you@company.com';
+   insert into public.members (id, email, name, is_admin) values ('u-owner', 'you@company.com', 'Your Name', true);
    ```
-4. Sign in again. The empty workspace offers **Import demo projects** or **Create first project**.
-5. **Administration › People & access**: add people by the email they sign in with, pick their tribes, and make admins. They get access on their first sign-in with that email (linked by the verified email, not by name). Put people into project teams from each project.
-6. Microsoft: **Authentication › Providers › Azure** with the Client ID / Secret of an Entra ID app registration whose redirect URI is `https://<project-ref>.supabase.co/auth/v1/callback`.
-7. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (Project Settings › API) in **Netlify › Site configuration › Environment variables**, or in `.env.local` for local dev (see `.env.example`), then redeploy. Vite reads them at build time.
+5. The empty workspace offers **Import demo projects** or **Create first project**.
+6. **Administration › People & access**: add people by the email they sign in with, pick their tribes, and make admins. They get access on their first sign-in with that email (linked by the verified email, not by name). Put people into project teams from each project.
+7. Microsoft: **Authentication › Providers › Azure** with the Client ID / Secret of an Entra ID app registration whose redirect URI is `https://<project-ref>.supabase.co/auth/v1/callback`.
+8. Put `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (Project Settings › API; the publishable key) in `.env.production`, or in **Netlify › Site configuration › Environment variables** (these win), or in `.env.local` for local dev (see `.env.example`), then redeploy. Vite reads them at build time.
 
 ### How sync works
 

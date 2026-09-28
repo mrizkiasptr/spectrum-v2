@@ -6,4 +6,6 @@ here="$(cd "$(dirname "$0")" && pwd)"
 psql -q -v ON_ERROR_STOP=1 -f "$here/00_stub_supabase.sql"
 for f in "$here"/../migrations/*.sql; do psql -q -v ON_ERROR_STOP=1 -d sbtest -f "$f"; done
 psql -q -d sbtest -c 'grant usage on schema public to authenticated; grant all on all tables in schema public to authenticated;'
+psql -q -f "$here/first_admin_test.sql" 2>&1 | grep -E 'NOTICE|ERROR' | sed 's/.*NOTICE:  //'
+psql -q -d sbtest -c 'truncate public.members cascade; delete from auth.users;'
 psql -q -f "$here/rls_test.sql" 2>&1 | grep -E 'NOTICE|ERROR|PASSED' | sed 's/.*NOTICE:  //'
