@@ -79,4 +79,12 @@ describe('workflow editing', () => {
     expect(out.projects![0].workflow).toHaveLength(4);
     expect(out.items![0].statusId).toBe('review');
   });
+
+  it('repairs missing or malformed saved data instead of crashing', () => {
+    const fallback = { members: [], sprints: [], currentUserId: 'u-mr' };
+    expect(migrateState(null, 2, fallback)).toMatchObject({ projects: [], items: [], currentUserId: 'u-mr' });
+    const out = migrateState({ projects: [{ id: 'p', workflow: [] }], items: [{ id: 'i' }] }, 2, fallback);
+    expect(out.projects![0].workflow.some((w) => w.category === 'done')).toBe(true);
+    expect(out.items![0]).toMatchObject({ status: 'todo', statusId: 'todo', criteria: [], comments: [] });
+  });
 });

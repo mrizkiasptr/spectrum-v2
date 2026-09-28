@@ -116,14 +116,33 @@ function workflowOf(projects: Project[], projectId: string): WorkflowStatus[] {
   return projects.find((p) => p.id === projectId)?.workflow ?? defaultWorkflow();
 }
 
-/** Upgrades persisted data from older app versions. */
-export function migrateState(persisted: unknown, version: number): Partial<SeedData> {
-  const st = { ...(persisted as Partial<SeedData>) };
-  if (version < 2) {
-    // v1 had four fixed statuses; give every project the default workflow and map items onto it.
-    st.projects = (st.projects ?? []).map((p) => ({ ...p, workflow: p.workflow ?? defaultWorkflow() }));
-    st.items = (st.items ?? []).map((i) => ({ ...i, statusId: i.statusId ?? i.status }));
+const LIST_KEYS = ['members', 'projects', 'sprints', 'items', 'retro', 'docs', 'holidays', 'favorites', 'recent'] as const;
+
+/**
+ * Makes persisted data safe to render, whatever version wrote it:
+ * missing lists fall back to the defaults, every project gets a workflow,
+ * and every item gets a workflow column. v1 had four fixed statuses.
+ */
+export function migrateState(persisted: unknown, _version?: number, fallback: Partial<SeedData> = {}): Partial<SeedData> {
+  const src = persisted && typeof persisted === 'object' ? (persisted as Partial<SeedData>) : {};
+  const st: Partial<SeedData> = { ...src };
+  for (const k of LIST_KEYS) {
+    if (!Array.isArray(st[k])) (st as Record<string, unknown>)[k] = fallback[k] ?? [];
   }
+  st.projects = st.projects!.map((p) => ({
+    ...p,
+    workflow: Array.isArray(p.workflow) && p.workflow.some((w) => w.category === 'done') ? p.workflow : defaultWorkflow(),
+    memberIds: Array.isArray(p.memberIds) ? p.memberIds : [],
+  }));
+  st.items = st.items!.map((i) => ({
+    ...i,
+    statusId: i.statusId ?? i.status ?? 'todo',
+    status: i.status ?? 'todo',
+    criteria: Array.isArray(i.criteria) ? i.criteria : [],
+    comments: Array.isArray(i.comments) ? i.comments : [],
+    attachments: Array.isArray(i.attachments) ? i.attachments : [],
+  }));
+  if (typeof st.currentUserId !== 'string') st.currentUserId = fallback.currentUserId;
   return st;
 }
 
@@ -455,6 +474,8 @@ export const useStore = create<State>()(
       name: 'spectrum-v2',
       version: 2,
       migrate: (persisted, version) => migrateState(persisted, version) as State,
+      // Normalize on every load, not only on version bumps, so old or partial data never blanks the app.
+      merge: (persisted, current) => ({ ...current, ...migrateState(persisted, 2, current) }),
       partialize: (s) => ({
         currentUserId: s.currentUserId,
         members: s.members,
