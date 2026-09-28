@@ -6,6 +6,7 @@ import { Dialog, StatusIcon } from '../components/ui';
 import { addDays, todayISO } from '../domain/dates';
 import { nextSprintNumber, progressOf, sprintName } from '../domain/sprint';
 import type { GoalOutcome, ItemType, Severity, Sprint } from '../domain/types';
+import type { Tribe } from '../domain/types';
 import { OUTCOME_LABEL, TRIBES, TYPE_LABEL, WEIGHTS } from '../domain/types';
 import { useProjectMembers } from '../store/hooks';
 import { useStore } from '../store/useStore';
@@ -122,13 +123,13 @@ export function CompleteSprintDialog({ sprint, onClose }: { sprint: Sprint; onCl
 
 /* ---------- New project ---------- */
 
-export function NewProjectDialog({ onClose }: { onClose: () => void }) {
+export function NewProjectDialog({ onClose, tribe }: { onClose: () => void; tribe?: Tribe }) {
   const projects = useStore((s) => s.projects);
   const create = useStore((s) => s.createProject);
   const navigate = useNavigate();
   const today = todayISO();
   const [f, setF] = useState({
-    name: '', code: '', key: '', client: '', description: '', tribe: TRIBES[0], startDate: today, endDate: addDays(today, 364),
+    name: '', code: '', key: '', client: '', description: '', tribe: tribe ?? TRIBES[0], startDate: today, endDate: addDays(today, 364),
   });
   const [touched, setTouched] = useState(false);
   const up = (k: keyof typeof f) => (e: { target: { value: string } }) => setF((x) => ({ ...x, [k]: e.target.value }));

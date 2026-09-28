@@ -9,7 +9,7 @@ import type { Project } from '../../domain/types';
 import { useProject, useProjectItems } from '../../store/hooks';
 import { useStore } from '../../store/useStore';
 import { NotFound } from '../misc';
-import { tribePath } from '../TribePage';
+import { tribePath } from '../tribe-parts';
 
 const TABS: { to: string; label: string; icon: IconName; end?: boolean }[] = [
   { to: '', label: 'Dashboard', icon: 'gauge', end: true },

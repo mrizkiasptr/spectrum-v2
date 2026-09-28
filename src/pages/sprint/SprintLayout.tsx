@@ -12,7 +12,7 @@ import { SprintSetupDialog } from '../../features/SprintSetupDialog';
 import { useProject, useToday } from '../../store/hooks';
 import { useStore } from '../../store/useStore';
 import { NotFound } from '../misc';
-import { tribePath } from '../TribePage';
+import { tribePath } from '../tribe-parts';
 
 export interface SprintCtx {
   project: Project;

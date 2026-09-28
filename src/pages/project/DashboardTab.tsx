@@ -8,7 +8,7 @@ import { projectInsight, workloadOf } from '../../domain/insights';
 import { attentionFor, isSprintReady, progressOf, sprintDaysLabel, sprintName } from '../../domain/sprint';
 import type { Sprint } from '../../domain/types';
 import { columnOf } from '../../domain/workflow';
-import { tribePath } from '../TribePage';
+import { tribePath } from '../tribe-parts';
 import { useToday } from '../../store/hooks';
 import { useStore } from '../../store/useStore';
 import { useProjectCtx } from './ProjectLayout';

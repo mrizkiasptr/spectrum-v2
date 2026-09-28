@@ -22,8 +22,8 @@ npm run build
 
 | Area | What you can do |
 | --- | --- |
-| **Project Board** (`/projects`) | Tribe cards on top (running projects, health mix, sprint progress, overdue, defects) — pick one to open its dashboard. Below: All / Favorites / My projects, status + tribe filters, search, grid or list view, recently opened, create a project. Each card shows the active sprint, its goal and progress, and one click opens the board. |
-| **Tribe dashboard** (`/projects/tribe/:tribe`) | KPIs for the tribe, every project in it (health, active sprint, progress vs time, tasks by status, overdue, defects, velocity trend) sortable by health, and a **Needs a decision** list. Switch tribe from the header. |
+| **Project Board** (`/projects`) | Tribes first: portfolio KPIs (running projects, health mix, overdue, defects), recently opened projects, and one card per tribe with its health mix, running projects and their health, sprint progress, overdue and defects. A tribe card opens the tribe page. |
+| **Tribe** (`/projects/tribe/:tribe`) | Tribe KPIs, then the tribe's projects: All / Favorites / My projects, search, status filter, **grid** (sprint at a glance) or **list** (health table: health, active sprint, progress vs time, tasks by status, overdue, defects, velocity). **Needs a decision** list, tribe switcher, new project (tribe prefilled). A project opens its dashboard. |
 | **Project › Dashboard** (project landing page) | Health with reasons, the active sprint (goal, progress vs elapsed working time, status mix), **Needs attention** with a next step for each, KPIs (velocity, goals met, backlog readiness, overdue, defects), **every sprint in the project** (dates, goal, tasks, delivered weight, goal outcome — click to open), velocity chart, tasks per board column, workload per person, overdue tasks. |
 | **Project › Backlog** | Ordered product backlog, inline weight estimate, sprint-readiness (weight + acceptance criteria), bulk add to a sprint with undo. |
 | **Project › Sprints** | Active / Planned / Completed groups. Create, set up, start, edit, complete, and delete draft sprints. |
