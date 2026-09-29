@@ -71,7 +71,7 @@ export function BacklogTab() {
         <label className="sr-only" htmlFor="bl-type">Type</label>
         <select id="bl-type" className="filter-select" value={type} onChange={(e) => setType(e.target.value as ItemType | 'all')}>
           <option value="all">Type: All</option>
-          <option value="story">Type: Story</option>
+          <option value="story">Type: Backlog</option>
           <option value="bug">Type: Bug</option>
         </select>
         <label className="check" style={{ fontSize: 13, alignItems: 'center' }}>
@@ -117,7 +117,7 @@ export function BacklogTab() {
 
       {shown.length === 0 ? (
         <Empty icon="layers" title={filtered ? 'No items match the filters' : 'The backlog is empty'}>
-          {filtered ? <span>Try clearing the search or filters.</span> : <span>Add the stories and bugs the team will work on next. Break them into tasks when you refine or plan them.</span>}
+          {filtered ? <span>Try clearing the search or filters.</span> : <span>Add the backlog items and bugs the team will work on next. Break them into tasks when you refine or plan them.</span>}
         </Empty>
       ) : (
         <div className="table-wrap">

@@ -214,7 +214,6 @@ export function createSeed(today: ISODate): SeedData {
   });
 
   const items: WorkItem[] = [];
-  const taskKeys: Record<string, number> = {};
   const add = (projectId: string, key: string, sprint: Sprint | null, spec: ItemSpec, rank: number) => {
     const start = sprint?.startDate ?? today;
     const derived = deriveStatus((spec.tasks ?? []).map(([, status]) => ({ status }) as WorkItem));
@@ -251,11 +250,10 @@ export function createSeed(today: ISODate): SeedData {
       completedAt,
     });
     (spec.tasks ?? []).forEach(([title, status, assignee, column], n) => {
-      taskKeys[key] = (taskKeys[key] ?? 900) + 1;
       items.push({
         id: uid('i'),
         projectId,
-        key: `${key}-${taskKeys[key]}`,
+        key: `${key}-${spec.key}.${n + 1}`,
         type: 'task',
         title,
         description: '',
@@ -360,13 +358,6 @@ export function createSeed(today: ISODate): SeedData {
     { id: uid('d'), projectId: 'p-at', title: 'QRISAN Refund BRD v0.3', url: 'https://example.com/refund-brd', addedBy: 'u-mr', updatedAt: ts(addDays(today, -1)) },
     { id: uid('d'), projectId: 'p-spe', title: 'Project Board v2 prototype', url: 'https://example.com/prototype', addedBy: 'u-mr', updatedAt: ts(addDays(today, -3)) },
   ];
-
-  // Task keys continue after each project's highest backlog key, like new items would.
-  for (const prefix of new Set(items.map((i) => i.key.split('-')[0]))) {
-    const own = items.filter((i) => i.key.startsWith(`${prefix}-`));
-    let next = Math.max(...own.filter((i) => i.type !== 'task').map((i) => Number(i.key.split('-')[1])));
-    for (const t of own.filter((i) => i.type === 'task')) t.key = `${prefix}-${++next}`;
-  }
 
   const y = Number(today.slice(0, 4));
   return {

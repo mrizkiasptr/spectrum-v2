@@ -181,7 +181,8 @@ export const STATUS_LABEL: Record<ItemStatus, string> = {
 
 export const STATUS_ORDER: ItemStatus[] = ['todo', 'in_progress', 'review', 'done'];
 
-export const TYPE_LABEL: Record<ItemType, string> = { story: 'Story', task: 'Task', bug: 'Bug' };
+/** 'story' is the stored id for a regular backlog item; the product calls it "Backlog". */
+export const TYPE_LABEL: Record<ItemType, string> = { story: 'Backlog', task: 'Task', bug: 'Bug' };
 
 export const OUTCOME_LABEL: Record<GoalOutcome, string> = {
   achieved: 'Achieved',

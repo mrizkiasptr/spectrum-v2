@@ -284,7 +284,7 @@ export function SprintBoard() {
           <label className="sr-only" htmlFor="sb-type">Backlog item type</label>
           <select id="sb-type" className="filter-select" value={type} onChange={(e) => setType(e.target.value as ItemType | 'all')}>
             <option value="all">All items</option>
-            <option value="story">Stories</option>
+            <option value="story">Backlog</option>
             <option value="bug">Bugs</option>
           </select>
           <div className="seg" role="radiogroup" aria-label="Board layout">
@@ -344,7 +344,7 @@ export function SprintBoard() {
             <div className="tb-empty" style={{ gridColumn: '1 / -1' }}>
               {scope.some((i) => i.type !== 'task')
                 ? 'Nothing matches these filters.'
-                : 'No backlog items in this sprint yet. Plan stories or bugs from the Backlog, then break them into tasks here.'}
+                : 'No backlog items in this sprint yet. Plan backlog items from the Backlog, then break them into tasks here.'}
             </div>
           )}
 

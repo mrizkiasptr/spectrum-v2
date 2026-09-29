@@ -8,7 +8,7 @@ describe('store', () => {
   beforeEach(() => s().resetDemo());
 
   it('creates items with the next project key', () => {
-    const max = Math.max(...s().items.filter((i) => i.projectId === 'p-at').map((i) => Number(i.key.split('-')[1])));
+    const max = Math.max(...s().items.filter((i) => i.projectId === 'p-at' && i.type !== 'task').map((i) => Number(i.key.split('-')[1])));
     const item = s().createItem('p-at', { title: 'New analysis', type: 'story', sprintId: null });
     expect(item.key).toBe(`ANL-${max + 1}`);
     expect(s().items.find((i) => i.id === item.id)?.sprintId).toBeNull();

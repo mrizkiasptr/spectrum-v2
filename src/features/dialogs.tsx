@@ -415,7 +415,7 @@ export function NewTaskDialog({
         <div className="col" style={{ gap: 8 }}>
           <strong>No backlog items {sprintId ? 'in this sprint' : 'yet'}</strong>
           <p className="muted" style={{ fontSize: 13 }}>
-            Tasks always come from a backlog item. {sprintId ? 'Plan a story or bug into this sprint from the Backlog first, then break it into tasks.' : 'Add a story or bug to the backlog first.'}
+            Tasks always come from a backlog item. {sprintId ? 'Plan a backlog item into this sprint from the Backlog first, then break it into tasks.' : 'Add a backlog item first.'}
           </p>
         </div>
       ) : (

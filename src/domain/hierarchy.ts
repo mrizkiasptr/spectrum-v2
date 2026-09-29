@@ -72,3 +72,53 @@ export function normalizeItem(i: WorkItem): WorkItem {
   if (i.type === 'task' && !parentId) return { ...i, type: 'story', parentId: null };
   return i.parentId === parentId ? i : { ...i, parentId };
 }
+
+/** Sequence number of a backlog item key: "ADV-12" → 12. Task keys ("ADV-12.3") aren't backlog numbers. */
+export function backlogNumber(key: string): number {
+  const n = key.split('-').pop() ?? '';
+  return /^\d+$/.test(n) ? Number(n) : 0;
+}
+
+/** Next key for a backlog item: tasks don't use up backlog numbers. */
+export function nextBacklogKey(items: WorkItem[], projectId: string, prefix: string): string {
+  const max = items.filter((i) => i.projectId === projectId && i.type !== 'task').reduce((m, i) => Math.max(m, backlogNumber(i.key)), 0);
+  return `${prefix}-${max + 1}`;
+}
+
+const taskSuffix = (parentKey: string, key: string): number | null => {
+  if (!key.startsWith(`${parentKey}.`)) return null;
+  const n = key.slice(parentKey.length + 1);
+  return /^\d+$/.test(n) ? Number(n) : null;
+};
+
+/** Tasks are numbered under their backlog item: ADV-1 → ADV-1.1, ADV-1.2, … */
+export function nextTaskKey(items: WorkItem[], parent: WorkItem): string {
+  const max = items.filter((i) => i.parentId === parent.id).reduce((m, t) => Math.max(m, taskSuffix(parent.key, t.key) ?? 0), 0);
+  return `${parent.key}.${max + 1}`;
+}
+
+/**
+ * Gives tasks that don't carry their item's key yet (older data used the project counter) a key
+ * under their item, in creation order. Deterministic, so every client arrives at the same keys.
+ */
+export function rekeyTasks(items: WorkItem[]): WorkItem[] {
+  const byId = new Map(items.map((i) => [i.id, i]));
+  const next = new Map<string, number>();
+  for (const t of items) {
+    const parent = t.parentId ? byId.get(t.parentId) : undefined;
+    const n = parent ? taskSuffix(parent.key, t.key) : null;
+    if (parent && n !== null) next.set(parent.id, Math.max(next.get(parent.id) ?? 0, n));
+  }
+  const pending = items
+    .filter((t) => t.type === 'task' && t.parentId && byId.has(t.parentId) && taskSuffix(byId.get(t.parentId)!.key, t.key) === null)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.rank - b.rank || a.id.localeCompare(b.id));
+  if (!pending.length) return items;
+  const keys = new Map<string, string>();
+  for (const t of pending) {
+    const parent = byId.get(t.parentId!)!;
+    const n = (next.get(parent.id) ?? 0) + 1;
+    next.set(parent.id, n);
+    keys.set(t.id, `${parent.key}.${n}`);
+  }
+  return items.map((i) => (keys.has(i.id) ? { ...i, key: keys.get(i.id)! } : i));
+}

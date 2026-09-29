@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { boardCards, deriveStatus, normalizeItem, tasksOf } from '../domain/hierarchy';
+import { boardCards, deriveStatus, normalizeItem, rekeyTasks, tasksOf } from '../domain/hierarchy';
 import { progressOf } from '../domain/sprint';
 import type { WorkItem } from '../domain/types';
 import { migrateState, useStore } from './useStore';
@@ -84,5 +84,28 @@ describe('backlog items and their tasks', () => {
     expect(normalizeItem(old)).toMatchObject({ type: 'story', parentId: null });
     const out = migrateState({ items: [{ id: 'i', projectId: 'p', type: 'task', status: 'todo' }] });
     expect(out.items![0]).toMatchObject({ type: 'story', parentId: null });
+  });
+
+  it('numbers tasks under their backlog item and keeps backlog numbers for backlog items', () => {
+    const parent = item('ANL-118');
+    expect(tasksOf(s().items, parent.id).map((t) => t.key)).toEqual(['ANL-118.1', 'ANL-118.2', 'ANL-118.3']);
+    const t = s().createItem('p-at', { title: 'Sign-off from ops', type: 'task', sprintId: null, parentId: parent.id });
+    expect(t.key).toBe('ANL-118.4');
+    const backlogMax = Math.max(...s().items.filter((i) => i.projectId === 'p-at' && i.type !== 'task').map((i) => Number(i.key.split('-')[1])));
+    const next = s().createItem('p-at', { title: 'Next backlog', type: 'story', sprintId: null });
+    expect(next.key).toBe(`ANL-${backlogMax + 1}`);
+    const first = s().createItem('p-at', { title: 'First task', type: 'task', sprintId: null, parentId: next.id });
+    expect(first.key).toBe(`ANL-${backlogMax + 1}.1`);
+  });
+
+  it('re-keys tasks from older data under their item, in creation order', () => {
+    const base = { projectId: 'p', type: 'task', parentId: 'a', rank: 0 } as const;
+    const items = [
+      { id: 'a', key: 'ADV-1', type: 'story', projectId: 'p', parentId: null, createdAt: '1', rank: 0 },
+      { ...base, id: 't2', key: 'ADV-3', createdAt: '3' },
+      { ...base, id: 't1', key: 'ADV-2', createdAt: '2' },
+      { ...base, id: 't0', key: 'ADV-1.1', createdAt: '1' },
+    ] as unknown as WorkItem[];
+    expect(rekeyTasks(items).map((i) => i.key)).toEqual(['ADV-1', 'ADV-1.3', 'ADV-1.2', 'ADV-1.1']);
   });
 });

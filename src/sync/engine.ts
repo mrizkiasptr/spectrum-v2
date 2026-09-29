@@ -2,6 +2,7 @@ import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
 import { create } from 'zustand';
 import { toast } from '../components/toast';
 import { useStore } from '../store/useStore';
+import { rekeyTasks } from '../domain/hierarchy';
 import { COLLECTIONS, TABLE, diff, fromRow, stableStringify, toRow, type Collection, type EntityOf, type Row } from './rows';
 
 export type SyncState = 'off' | 'loading' | 'saved' | 'saving' | 'offline' | 'error';
@@ -91,7 +92,8 @@ export class SyncEngine {
 
     const patch: Partial<Record<Collection, unknown[]>> = {};
     for (const [c, rows] of results) {
-      const list = rows.map((r) => fromRow(c, r));
+      // Older rows numbered tasks with the project counter; show them under their item's key.
+      const list = c === 'items' ? rekeyTasks(rows.map((r) => fromRow('items', r))) : rows.map((r) => fromRow(c, r));
       this.known[c] = new Map(list.map((e) => [e.id, stableStringify(e)]));
       patch[c] = list;
     }

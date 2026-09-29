@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware';
 import { addDays, diffDays, lengthInDays, todayISO } from '../domain/dates';
 import { createSeed, type SeedData } from '../domain/seed';
 import { nextSprintNumber, startBlocker, suggestPeriod } from '../domain/sprint';
-import { normalizeItem, syncParents } from '../domain/hierarchy';
+import { nextBacklogKey, nextTaskKey, normalizeItem, rekeyTasks, syncParents } from '../domain/hierarchy';
 import { defaultWorkflow, findStatus, firstOfCategory, validateWorkflow } from '../domain/workflow';
 import type {
   Doc,
@@ -100,10 +100,7 @@ export type State = SeedData & Actions;
 const fresh = () => createSeed(todayISO());
 
 function nextItemKey(items: WorkItem[], project: Project): string {
-  const max = items
-    .filter((i) => i.projectId === project.id)
-    .reduce((m, i) => Math.max(m, Number(i.key.split('-').pop()) || 0), 0);
-  return `${project.key}-${max + 1}`;
+  return nextBacklogKey(items, project.id, project.key);
 }
 
 /** Keeps completedAt and release consistent with status changes. */
@@ -145,7 +142,7 @@ export function migrateState(persisted: unknown, _version?: number, fallback: Pa
     workflow: Array.isArray(p.workflow) && p.workflow.some((w) => w.category === 'done') ? p.workflow : defaultWorkflow(),
     memberIds: Array.isArray(p.memberIds) ? p.memberIds : [],
   }));
-  st.items = st.items!.map((i) =>
+  st.items = rekeyTasks(st.items!.map((i) =>
     normalizeItem({
       ...i,
       statusId: i.statusId ?? i.status ?? 'todo',
@@ -154,7 +151,7 @@ export function migrateState(persisted: unknown, _version?: number, fallback: Pa
       comments: Array.isArray(i.comments) ? i.comments : [],
       attachments: Array.isArray(i.attachments) ? i.attachments : [],
     }),
-  );
+  ));
   if (typeof st.currentUserId !== 'string') st.currentUserId = fallback.currentUserId;
   return st;
 }
@@ -313,7 +310,7 @@ export const useStore = create<State>()(
         const item: WorkItem = {
           id: newId('i'),
           projectId,
-          key: nextItemKey(s.items, project),
+          key: parent ? nextTaskKey(s.items, parent) : nextItemKey(s.items, project),
           type: input.type,
           title: input.title.trim(),
           description: input.description ?? '',
