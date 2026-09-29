@@ -64,7 +64,7 @@ export function SprintBoard() {
     next.set('view', v);
     setParams(next, { replace: true });
   };
-  const [group, setGroup] = usePref<Group>('sb-group', 'item');
+  const [group, setGroup] = usePref<Group>('sb-group3', 'none');
   const [dragId, setDragId] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
   const [addTask, setAddTask] = useState<{ parentId?: string; statusId?: string } | null>(null);
@@ -238,6 +238,70 @@ export function SprintBoard() {
           {i.comments.length > 0 && <span className="row num muted" style={{ gap: 3 }} title="Comments"><Icon name="message" size={12} /> {i.comments.length}</span>}
           <span className="grow" />
           <Avatar member={assignee} />
+        </div>
+      </article>
+    );
+  };
+
+  /** The board's original card: key + type, title, parent backlog, due and points, then people and activity. */
+  const renderClassicCard = (i: WorkItem, column: WorkflowStatus) => {
+    const due = i.dueDate && i.status !== 'done' ? fmtDue(i.dueDate, today) : null;
+    const assignee = members.find((m) => m.id === i.assigneeId) ?? null;
+    const isTask = i.type === 'task';
+    const parent = isTask ? scope.find((x) => x.id === i.parentId) ?? null : null;
+    const critDone = i.criteria.filter((c) => c.done).length;
+    return (
+      <article
+        key={i.id}
+        className={`task-card ${dragId === i.id ? 'dragging' : ''}`}
+        {...dragProps(i)}
+        aria-label={`${i.key} ${i.title}, ${column.name}`}
+      >
+        <div className="col" style={{ padding: '12px 12px 10px', gap: 8 }}>
+          <div className="row" style={{ fontSize: 12 }}>
+            <span className="muted num" style={{ fontWeight: 600 }}>{i.key}</span>
+            {isTask ? <span className="task-chip">Task</span> : <TypeBadge type={i.type} />}
+            {i.severity && i.severity !== 'minor' && <SeverityBadge severity={i.severity} />}
+            <span className="grow" />
+            {cardMenu(i, column)}
+          </div>
+          <button type="button" className="task-card-title" onClick={() => openTask(i.id)}>{i.title}</button>
+          {parent && (
+            <button type="button" className="parent-link truncate" onClick={() => openTask(parent.id)} title={`${parent.key} ${parent.title}`}>
+              <Icon name="layers" size={12} /> {parent.key} · {parent.title}
+            </button>
+          )}
+          {!isTask && i.description && (
+            <span className="muted" style={{ fontSize: 12, lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+              {i.description}
+            </span>
+          )}
+          <div className="row" style={{ fontSize: 12 }}>
+            {due && (
+              <span className={`chip-date ${due.tone === 'neutral' ? '' : due.tone}`}>
+                <Icon name="calendar" size={13} /> {due.label}
+              </span>
+            )}
+            <span className="grow" />
+            {(!isTask || i.weight !== null) && (
+              <span className="row num" style={{ gap: 4, fontWeight: 600, color: i.weight === null ? 'var(--warning-text)' : 'var(--text-2)' }}>
+                <Icon name="weight" size={13} color="var(--text-muted)" />
+                {i.weight === null ? 'No weight' : `Weight ${i.weight}`}
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="row" style={{ gap: 12, padding: '8px 12px', borderTop: '1px solid var(--border-soft)', fontSize: 12, color: 'var(--text-muted)' }}>
+          <Avatar member={assignee} />
+          <span className="grow" />
+          {i.hours != null && <span className="row num" style={{ gap: 4 }} title="Estimated hours"><Icon name="clock" size={14} /> {i.hours}h</span>}
+          {i.criteria.length > 0 && (
+            <span className="row num" style={{ gap: 4 }} title="Acceptance criteria done">
+              <Icon name="checkCircle" size={14} /> {critDone}/{i.criteria.length}
+            </span>
+          )}
+          <span className="row num" style={{ gap: 4 }} title="Comments"><Icon name="message" size={14} /> {i.comments.length}</span>
+          <span className="row num" style={{ gap: 4 }} title="Attachments"><Icon name="paperclip" size={14} /> {i.attachments.length}</span>
         </div>
       </article>
     );
@@ -445,7 +509,7 @@ export function SprintBoard() {
           })}
         </div>
       ) : (
-        <div className="board kboard" style={{ gridTemplateColumns: `repeat(${workflow.length}, minmax(var(--col-min), 1fr))` }}>
+        <div className="board" style={{ overflowX: 'auto', gridTemplateColumns: `repeat(${workflow.length}, minmax(260px, 1fr))` }}>
           {workflow.map((column, colIdx) => {
             const isDone = column.category === 'done';
             const col = flatCards
@@ -454,12 +518,48 @@ export function SprintBoard() {
             const limited = isDone && !showAllDone ? col.slice(0, DONE_PREVIEW) : col;
             return (
               <section key={column.id} className={`column ${over === column.id ? 'drop' : ''}`} aria-labelledby={`col-${column.id}`} {...dropZone(column.id, column)}>
-                {columnHead(column, colIdx, col.length)}
-                {col.length === 0 && <div className="tb-empty-cell">{dragId ? 'Drop here' : 'No tasks'}</div>}
-                {limited.map((i) => renderCard(i, column, true))}
+                <div className="column-head" style={{ alignItems: 'flex-start' }} title="Drag cards between columns, or use the card menu">
+                  <ColumnIcon column={column} />
+                  <h2 id={`col-${column.id}`} style={{ fontSize: 14, fontWeight: 600, minWidth: 0, overflowWrap: 'anywhere', lineHeight: 1.3 }}>{column.name}</h2>
+                  <span className="count-pill num">{col.length}</span>
+                  <span className="grow" />
+                  {!readOnly && (
+                    <>
+                      <button type="button" className="icon-btn sm" aria-label={`Add task to ${column.name}`} onClick={() => setAddTask({ statusId: column.id })}>
+                        <Icon name="plus" size={16} />
+                      </button>
+                      <MenuButton label={`Column options for ${column.name}`} trigger={<Icon name="more" size={16} />}>
+                        {(close) => (
+                          <>
+                            <button type="button" role="menuitem" onClick={() => { close(); setEditingColumns(true); }}>
+                              <Icon name="pen" size={16} /> Rename or edit columns
+                            </button>
+                            <button type="button" role="menuitem" disabled={colIdx === 0} onClick={() => { close(); moveStatus(project.id, column.id, colIdx - 1); }}>
+                              <Icon name="chevronLeft" size={16} /> Move column left
+                            </button>
+                            <button type="button" role="menuitem" disabled={colIdx === workflow.length - 1} onClick={() => { close(); moveStatus(project.id, column.id, colIdx + 1); }}>
+                              <Icon name="chevronRight" size={16} /> Move column right
+                            </button>
+                          </>
+                        )}
+                      </MenuButton>
+                    </>
+                  )}
+                </div>
+                {col.length === 0 && (
+                  <div className="muted" style={{ fontSize: 12, padding: '16px 8px', textAlign: 'center', border: '1px dashed var(--border-strong)', borderRadius: 8 }}>
+                    {dragId ? 'Drop here' : 'No tasks'}
+                  </div>
+                )}
+                {limited.map((i) => renderClassicCard(i, column))}
                 {isDone && col.length > DONE_PREVIEW && (
                   <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--primary-darker)', justifyContent: 'flex-start' }} onClick={() => setShowAllDone((v) => !v)}>
-                    {showAllDone ? 'Show fewer' : `Show ${col.length - DONE_PREVIEW} more done`}
+                    {showAllDone ? 'Show fewer' : `Show ${col.length - DONE_PREVIEW} more done tasks`}
+                  </button>
+                )}
+                {!readOnly && (
+                  <button type="button" className="btn btn-ghost btn-sm" style={{ justifyContent: 'flex-start', color: 'var(--text-muted)' }} onClick={() => setAddTask({ statusId: column.id })}>
+                    <Icon name="plus" size={16} /> Add task
                   </button>
                 )}
               </section>
