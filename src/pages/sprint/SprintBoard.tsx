@@ -64,7 +64,7 @@ export function SprintBoard() {
     next.set('view', v);
     setParams(next, { replace: true });
   };
-  const [group, setGroup] = usePref<Group>('sb-group2', 'none');
+  const [group, setGroup] = usePref<Group>('sb-group', 'item');
   const [dragId, setDragId] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
   const [addTask, setAddTask] = useState<{ parentId?: string; statusId?: string } | null>(null);
@@ -194,12 +194,12 @@ export function SprintBoard() {
     },
   });
 
-  /** Card (Figma): backlog chip + menu, title, then points, hours, due and the people on it. */
+  /** Compact card: key, title, then one meta row (due, weight for items, assignee). */
   const renderCard = (i: WorkItem, column: WorkflowStatus, showParent: boolean) => {
     const due = i.dueDate && i.status !== 'done' ? fmtDue(i.dueDate, today) : null;
+    const assignee = members.find((m) => m.id === i.assigneeId) ?? null;
     const isTask = i.type === 'task';
-    const backlogRef = isTask ? scope.find((x) => x.id === i.parentId) ?? null : i;
-    const people = [i.assigneeId, i.reviewerId].filter((id, n, arr): id is string => !!id && arr.indexOf(id) === n).map((id) => members.find((m) => m.id === id) ?? null);
+    const parent = isTask ? scope.find((x) => x.id === i.parentId) : null;
     return (
       <article
         key={i.id}
@@ -208,35 +208,36 @@ export function SprintBoard() {
         aria-label={`${i.key} ${i.title}, ${column.name}`}
       >
         <div className="kcard-top">
-          {backlogRef && (showParent || !isTask) ? (
-            <button
-              type="button"
-              className={`kcard-chip ${backlogRef.type === 'bug' ? 'is-bug' : ''}`}
-              onClick={() => openTask(backlogRef.id)}
-              title={`${backlogRef.key} · ${backlogRef.title}`}
-            >
-              {backlogRef.key}
-            </button>
-          ) : (
-            <span className="kcard-key num">{i.key}</span>
-          )}
+          <span className="kcard-key num">{i.key}</span>
+          {!isTask && <TypeBadge type={i.type} />}
           {i.severity && i.severity !== 'minor' && <SeverityBadge severity={i.severity} />}
           <span className="grow" />
           {cardMenu(i, column)}
         </div>
-        <button type="button" className="kcard-title" onClick={() => openTask(i.id)}>
-          {showParent && isTask && <span className="sr-only">{i.key} </span>}
-          {i.title}
-        </button>
+        <button type="button" className="kcard-title" onClick={() => openTask(i.id)}>{i.title}</button>
+        {showParent && parent && (
+          <button type="button" className="parent-link truncate" onClick={() => openTask(parent.id)} title={`${parent.key} ${parent.title}`}>
+            <Icon name="layers" size={12} /> {parent.key} · {parent.title}
+          </button>
+        )}
         <div className="kcard-meta">
-          <span className="kcard-stat" title="Points"><Icon name="weight" size={16} /> {i.weight ?? '–'} Point</span>
-          <span className="kcard-stat" title="Estimated hours"><Icon name="clock" size={16} /> {i.hours ?? '–'} Hours</span>
-          {due && due.tone !== 'neutral' && (
-            <span className={`chip-date ${due.tone}`} title={`Due ${i.dueDate}`}><Icon name="calendar" size={12} /> {due.label}</span>
+          {due && (
+            <span className={`chip-date ${due.tone === 'neutral' ? '' : due.tone}`}>
+              <Icon name="calendar" size={12} /> {due.label}
+            </span>
           )}
-          <span className="avatar-pile">
-            {people.length ? people.map((m, n) => <Avatar key={m?.id ?? n} member={m} />) : <Avatar member={null} />}
-          </span>
+          {!isTask && (
+            <span className="row num" style={{ gap: 3, color: i.weight === null ? 'var(--warning-text)' : 'var(--text-muted)' }} title="Weight">
+              <Icon name="weight" size={12} /> {i.weight ?? '—'}
+            </span>
+          )}
+          {isTask && i.weight !== null && (
+            <span className="row num muted" style={{ gap: 3 }} title="Points"><Icon name="weight" size={12} /> {i.weight}</span>
+          )}
+          {i.hours != null && <span className="row num muted" style={{ gap: 3 }} title="Estimated hours"><Icon name="clock" size={12} /> {i.hours}h</span>}
+          {i.comments.length > 0 && <span className="row num muted" style={{ gap: 3 }} title="Comments"><Icon name="message" size={12} /> {i.comments.length}</span>}
+          <span className="grow" />
+          <Avatar member={assignee} />
         </div>
       </article>
     );
@@ -274,87 +275,77 @@ export function SprintBoard() {
   );
 
   const laneCards = lanes.flatMap((l) => l.cards);
-  const activeFilters = Number(mine) + Number(type !== 'all');
   const gridCols = `var(--lane-w) repeat(${workflow.length}, minmax(var(--col-min), 1fr))`;
   const allCollapsed = lanes.length > 0 && lanes.every((l) => collapsed[l.item.id] ?? l.item.status === 'done');
 
   return (
     <div className="page" style={{ paddingTop: 16, gap: 14 }}>
       <div className="board-toolbar">
-        <div className="seg" role="radiogroup" aria-label="View">
-          <button type="button" role="radio" aria-checked={view === 'kanban'} onClick={() => setView('kanban')}><Icon name="kanban" size={15} /> Kanban</button>
-          <button type="button" role="radio" aria-checked={view === 'list'} onClick={() => setView('list')}><Icon name="list" size={15} /> List</button>
-        </div>
-        <div className="row wrap" style={{ gap: 8, justifyContent: 'flex-end' }}>
-          <label className="search-box" style={{ width: 240 }}>
+        <div className="row wrap" style={{ gap: 8 }}>
+          <label className="search-box" style={{ width: 220 }}>
             <Icon name="search" size={16} />
-            <input type="search" aria-label="Search tasks and backlog items" placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} />
+            <input type="search" aria-label="Search tasks and backlog items" placeholder="Search title or ID" value={q} onChange={(e) => setQ(e.target.value)} />
           </label>
-          <MenuButton
-            label="Filter"
-            className={`btn btn-secondary btn-md filter-btn ${activeFilters ? 'on' : ''}`}
-            trigger={<><Icon name="sliders" size={16} /> Filter{activeFilters ? <span className="count-pill num">{activeFilters}</span> : null}</>}
-            align="right"
+          <button
+            type="button"
+            className="btn btn-secondary btn-md"
+            aria-pressed={mine}
+            onClick={() => setMine(!mine)}
+            style={mine ? { borderColor: 'var(--primary)', background: 'var(--primary-subtle)', color: 'var(--primary-darker)' } : undefined}
           >
-            {(close) => (
-              <div className="filter-menu" role="group" aria-label="Filters">
-                <label className="check">
-                  <input type="checkbox" checked={mine} onChange={(e) => setMine(e.target.checked)} /> Only my tasks
-                </label>
-                <label className="field-label" htmlFor="sb-type" style={{ marginTop: 6 }}>Backlog type</label>
-                <select id="sb-type" className="filter-select" value={type} onChange={(e) => setType(e.target.value as ItemType | 'all')}>
-                  <option value="all">All</option>
-                  <option value="story">Backlog</option>
-                  <option value="bug">Bug</option>
-                </select>
-                {view === 'kanban' && (
-                  <>
-                    <label className="field-label" htmlFor="sb-group" style={{ marginTop: 6 }}>Group cards</label>
-                    <select id="sb-group" className="filter-select" value={group} onChange={(e) => setGroup(e.target.value as Group)}>
-                      <option value="none">None</option>
-                      <option value="item">By backlog item</option>
-                    </select>
-                  </>
-                )}
-                <div className="row" style={{ justifyContent: 'space-between', marginTop: 8 }}>
-                  <button type="button" className="btn-link" disabled={!activeFilters} onClick={() => { setMine(false); setType('all'); }}>Clear filters</button>
-                  <button type="button" className="btn btn-secondary btn-sm" onClick={close}>Done</button>
-                </div>
-              </div>
-            )}
-          </MenuButton>
-          {!readOnly && (
+            <Avatar member={members.find((m) => m.id === me) ?? null} /> My tasks
+          </button>
+          <label className="sr-only" htmlFor="sb-type">Backlog item type</label>
+          <select id="sb-type" className="filter-select" value={type} onChange={(e) => setType(e.target.value as ItemType | 'all')}>
+            <option value="all">All items</option>
+            <option value="story">Backlog</option>
+            <option value="bug">Bugs</option>
+          </select>
+          <div className="seg" role="radiogroup" aria-label="View">
+            <button type="button" role="radio" aria-checked={view === 'kanban'} onClick={() => setView('kanban')}><Icon name="kanban" size={15} /> Kanban</button>
+            <button type="button" role="radio" aria-checked={view === 'list'} onClick={() => setView('list')}><Icon name="list" size={15} /> List</button>
+          </div>
+          {view === 'kanban' && (
             <>
-              <button type="button" className="btn btn-primary btn-md" onClick={() => setAddTask({ statusId: firstOfCategory(workflow, 'todo').id })}>
-                <Icon name="plus" size={16} /> Add Task
-              </button>
-              <MenuButton label="Board options" trigger={<Icon name="more" size={18} />} className="icon-btn bordered" align="right">
-                {(close) => (
-                  <>
-                    <button type="button" role="menuitem" onClick={() => { close(); setAddItem(true); }}>
-                      <Icon name="layers" size={16} /> Add backlog item
-                    </button>
-                    <button type="button" role="menuitem" onClick={() => { close(); setEditingColumns(true); }}>
-                      <Icon name="pen" size={16} /> Edit columns
-                    </button>
-                    {(view === 'list' || group === 'item') && (
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => {
-                          close();
-                          setCollapsed(Object.fromEntries(lanes.map((l) => [l.item.id, !allCollapsed])));
-                        }}
-                      >
-                        <Icon name={allCollapsed ? 'chevronDown' : 'chevronUp'} size={16} /> {allCollapsed ? 'Expand all rows' : 'Collapse all rows'}
-                      </button>
-                    )}
-                  </>
-                )}
-              </MenuButton>
+              <label className="sr-only" htmlFor="sb-group">Group cards</label>
+              <select id="sb-group" className="filter-select" value={group} onChange={(e) => setGroup(e.target.value as Group)}>
+                <option value="item">Group: Backlog item</option>
+                <option value="none">Group: None</option>
+              </select>
             </>
           )}
         </div>
+        {!readOnly && (
+          <div className="row" style={{ gap: 8 }}>
+            <button type="button" className="btn btn-secondary btn-md" onClick={() => setAddItem(true)}>
+              <Icon name="layers" size={16} /> Add item
+            </button>
+            <button type="button" className="btn btn-primary btn-md" onClick={() => setAddTask({ statusId: firstOfCategory(workflow, 'todo').id })}>
+              <Icon name="plus" size={16} /> Add task
+            </button>
+            <MenuButton label="Board options" trigger={<Icon name="more" size={18} />} className="icon-btn bordered" align="right">
+              {(close) => (
+                <>
+                  <button type="button" role="menuitem" onClick={() => { close(); setEditingColumns(true); }}>
+                    <Icon name="sliders" size={16} /> Edit columns
+                  </button>
+                  {(view === 'list' || group === 'item') && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        close();
+                        setCollapsed(Object.fromEntries(lanes.map((l) => [l.item.id, !allCollapsed])));
+                      }}
+                    >
+                      <Icon name={allCollapsed ? 'chevronDown' : 'chevronUp'} size={16} /> {allCollapsed ? 'Expand all rows' : 'Collapse all rows'}
+                    </button>
+                  )}
+                </>
+              )}
+            </MenuButton>
+          </div>
+        )}
       </div>
 
       {view === 'list' ? (
@@ -469,11 +460,6 @@ export function SprintBoard() {
                 {isDone && col.length > DONE_PREVIEW && (
                   <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--primary-darker)', justifyContent: 'flex-start' }} onClick={() => setShowAllDone((v) => !v)}>
                     {showAllDone ? 'Show fewer' : `Show ${col.length - DONE_PREVIEW} more done`}
-                  </button>
-                )}
-                {!readOnly && (
-                  <button type="button" className="col-add" onClick={() => setAddTask({ statusId: column.id })}>
-                    <Icon name="plus" size={18} /> Add Task
                   </button>
                 )}
               </section>
