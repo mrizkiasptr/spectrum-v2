@@ -118,7 +118,10 @@ export interface WorkItem {
   status: ItemStatus;
   /** The project workflow column the item sits in. */
   statusId: string;
+  /** Points. Backlog items' points drive velocity; task points are informational. */
   weight: number | null;
+  /** Estimated hours of work (optional). */
+  hours?: number | null;
   assigneeId: string | null;
   reviewerId: string | null;
   dueDate: ISODate | null;

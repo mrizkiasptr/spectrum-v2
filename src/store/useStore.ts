@@ -46,6 +46,7 @@ export interface NewItemInput {
   description?: string;
   /** Required for tasks: the backlog item they belong to (they take its sprint). */
   parentId?: string | null;
+  hours?: number | null;
 }
 
 export interface CompleteSprintInput {
@@ -316,7 +317,8 @@ export const useStore = create<State>()(
           description: input.description ?? '',
           status,
           statusId: column.id,
-          weight: parent ? null : input.weight ?? null,
+          weight: input.weight ?? null,
+          hours: input.hours ?? null,
           assigneeId: input.assigneeId ?? null,
           reviewerId: null,
           dueDate: null,

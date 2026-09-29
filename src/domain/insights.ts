@@ -162,10 +162,12 @@ export function workloadOf(scope: WorkItem[], members: Member[]): Workload[] {
   for (const i of scope) {
     const key = i.assigneeId ?? '';
     const w = map.get(key) ?? { member: members.find((m) => m.id === i.assigneeId) ?? null, openTasks: 0, openWeight: 0, doneWeight: 0 };
-    if (i.status === 'done') w.doneWeight += i.weight ?? 0;
+    // Points count once, on the backlog item; task points are informational.
+    const points = i.type === 'task' ? 0 : i.weight ?? 0;
+    if (i.status === 'done') w.doneWeight += points;
     else {
       w.openTasks++;
-      w.openWeight += i.weight ?? 0;
+      w.openWeight += points;
     }
     map.set(key, w);
   }

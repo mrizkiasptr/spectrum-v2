@@ -377,12 +377,16 @@ export function NewTaskDialog({
   const [parent, setParent] = useState(parentId ?? parents.find((p) => p.status !== 'done')?.id ?? parents[0]?.id ?? '');
   const [title, setTitle] = useState('');
   const [assigneeId, setAssigneeId] = useState<string | null>(null);
+  const [points, setPoints] = useState<number | null>(null);
+  const [hours, setHours] = useState('');
   const [another, setAnother] = useState(false);
   const chosen = parents.find((p) => p.id === parent);
+  const hoursValue = hours.trim() === '' ? null : Number(hours.replace(',', '.'));
+  const hoursError = hoursValue !== null && !(Number.isFinite(hoursValue) && hoursValue >= 0 && hoursValue <= 999) ? 'Enter hours between 0 and 999.' : null;
 
   const submit = () => {
-    if (!title.trim() || !chosen) return;
-    const item = create(projectId, { title, type: 'task', sprintId: chosen.sprintId, parentId: chosen.id, assigneeId, statusId });
+    if (!title.trim() || !chosen || hoursError) return;
+    const item = create(projectId, { title, type: 'task', sprintId: chosen.sprintId, parentId: chosen.id, assigneeId, statusId, weight: points, hours: hoursValue });
     toast(`${item.key} added to ${chosen.key}.`);
     if (another) {
       setTitle('');
@@ -404,7 +408,7 @@ export function NewTaskDialog({
               Add another after this
             </label>
             <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
-            <button type="button" className="btn btn-primary" disabled={!title.trim() || !chosen} onClick={submit}>Add task</button>
+            <button type="button" className="btn btn-primary" disabled={!title.trim() || !chosen || !!hoursError} onClick={submit}>Add task</button>
           </>
         ) : (
           <button type="button" className="btn btn-secondary" onClick={onClose}>Close</button>
@@ -431,6 +435,20 @@ export function NewTaskDialog({
           <div className="field">
             <label className="field-label" htmlFor="nt-title">Task <span className="req">*</span></label>
             <input id="nt-title" data-autofocus className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Write API contract, Review with PO" />
+          </div>
+          <div className="grid-2" style={{ gap: 12 }}>
+            <div className="field">
+              <label className="field-label" htmlFor="nt-points">Point</label>
+              <select id="nt-points" className="input" value={points ?? ''} onChange={(e) => setPoints(e.target.value ? Number(e.target.value) : null)}>
+                <option value="">No points</option>
+                {WEIGHTS.map((w) => <option key={w} value={w}>{w}</option>)}
+              </select>
+            </div>
+            <div className="field">
+              <label className="field-label" htmlFor="nt-hours">Estimate (hours)</label>
+              <input id="nt-hours" className="input" inputMode="decimal" placeholder="e.g. 6" value={hours} onChange={(e) => setHours(e.target.value)} aria-invalid={!!hoursError || undefined} />
+              {hoursError && <span className="field-error">{hoursError}</span>}
+            </div>
           </div>
           <div className="field">
             <label className="field-label" htmlFor="nt-assignee">Assignee</label>

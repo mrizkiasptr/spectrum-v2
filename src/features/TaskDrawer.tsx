@@ -234,14 +234,23 @@ function TaskDetail({ item, onClose }: { item: WorkItem; onClose: () => void }) 
               )}
               <span className="muted">Sprint</span>
               <span>{sprint ? `${sprintName(sprint)} (follows ${parent?.key ?? 'its item'})` : `Backlog (follows ${parent?.key ?? 'its item'})`}</span>
+              <label className="muted" htmlFor="td-weight">Point</label>
+              <select id="td-weight" className="filter-select" style={{ width: 170 }} value={item.weight ?? ''} onChange={(e) => set({ weight: e.target.value ? Number(e.target.value) : null })}>
+                <option value="">No points</option>
+                {WEIGHTS.map((w) => <option key={w} value={w}>{w}</option>)}
+              </select>
+              <label className="muted" htmlFor="td-hours">Estimate</label>
+              <HoursInput value={item.hours ?? null} onChange={(hours) => set({ hours })} />
             </>
           ) : (
           <>
-          <label className="muted" htmlFor="td-weight">Weight</label>
+          <label className="muted" htmlFor="td-weight">Point</label>
           <select id="td-weight" className="filter-select" style={{ width: 170 }} value={item.weight ?? ''} onChange={(e) => set({ weight: e.target.value ? Number(e.target.value) : null })}>
             <option value="">Not estimated</option>
             {WEIGHTS.map((w) => <option key={w} value={w}>{w}</option>)}
           </select>
+          <label className="muted" htmlFor="td-hours">Estimate</label>
+          <HoursInput value={item.hours ?? null} onChange={(hours) => set({ hours })} />
           <label className="muted" htmlFor="td-sprint">Sprint</label>
           <div className="row">
             <select id="td-sprint" className="filter-select" style={{ width: 170 }} value={item.sprintId ?? ''} onChange={(e) => set({ sprintId: e.target.value || null })}>
@@ -437,5 +446,36 @@ function TaskDetail({ item, onClose }: { item: WorkItem; onClose: () => void }) 
         <button type="submit" className="btn btn-primary" disabled={!comment.trim()}>Send</button>
       </form>
     </>
+  );
+}
+
+/** Hours estimate: saved on blur; empty clears it. */
+function HoursInput({ value, onChange }: { value: number | null; onChange: (v: number | null) => void }) {
+  const [text, setText] = useState(value === null ? '' : String(value));
+  useEffect(() => setText(value === null ? '' : String(value)), [value]);
+  const commit = () => {
+    const t = text.trim().replace(',', '.');
+    const n = t === '' ? null : Number(t);
+    if (n === null || (Number.isFinite(n) && n >= 0 && n <= 999)) {
+      const rounded = n === null ? null : Math.round(n * 4) / 4;
+      if (rounded !== value) onChange(rounded);
+      setText(rounded === null ? '' : String(rounded));
+    } else setText(value === null ? '' : String(value));
+  };
+  return (
+    <div className="row" style={{ gap: 8 }}>
+      <input
+        id="td-hours"
+        className="input input-sm"
+        style={{ width: 96 }}
+        inputMode="decimal"
+        placeholder="0"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+      />
+      <span className="muted">hours</span>
+    </div>
   );
 }
