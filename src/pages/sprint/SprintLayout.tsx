@@ -23,7 +23,6 @@ export const useSprintCtx = () => useOutletContext<SprintCtx>();
 
 const TABS: { to: string; label: string; icon: IconName }[] = [
   { to: '', label: 'Board', icon: 'kanban' },
-  { to: 'list', label: 'Task list', icon: 'list' },
   { to: 'report', label: 'Report', icon: 'chart' },
   { to: 'review', label: 'Review', icon: 'target' },
   { to: 'retro', label: 'Retro', icon: 'message' },

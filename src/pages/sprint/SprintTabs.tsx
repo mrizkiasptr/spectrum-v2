@@ -2,11 +2,10 @@ import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Icon } from '../../components/Icon';
 import { toast } from '../../components/toast';
-import { Avatar, Empty, OutcomeBadge, ItemStatusBadge, TypeBadge } from '../../components/ui';
-import { diffDays, fmtDate, fmtDue } from '../../domain/dates';
+import { Avatar, Empty, OutcomeBadge, ItemStatusBadge } from '../../components/ui';
+import { diffDays, fmtDate } from '../../domain/dates';
 import { burndown, progressOf, sprintName } from '../../domain/sprint';
 import type { WorkItem } from '../../domain/types';
-import { statusIndex } from '../../domain/workflow';
 import { RetroBoard } from '../../features/RetroBoard';
 import { useToday } from '../../store/hooks';
 import { useStore } from '../../store/useStore';
@@ -16,94 +15,6 @@ function useSprintItems() {
   const { sprint } = useSprintCtx();
   const all = useStore((s) => s.items);
   return useMemo(() => all.filter((i) => i.sprintId === sprint.id), [all, sprint.id]);
-}
-
-/* ---------- Task list ---------- */
-
-type SortKey = 'key' | 'status' | 'weight' | 'due' | 'assignee';
-
-export function SprintTaskList() {
-  const { project } = useSprintCtx();
-  const workflow = project.workflow;
-  const items = useSprintItems();
-  const members = useStore((s) => s.members);
-  const today = useToday();
-  const [, setParams] = useSearchParams();
-  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: 'status', dir: 1 });
-
-  const sorted = [...items].sort((a, b) => {
-    const name = (i: WorkItem) => members.find((m) => m.id === i.assigneeId)?.name ?? '~';
-    const v: Record<SortKey, (i: WorkItem) => string | number> = {
-      key: (i) => Number(i.key.split('-').pop()),
-      status: (i) => statusIndex(workflow, i),
-      weight: (i) => i.weight ?? -1,
-      due: (i) => i.dueDate ?? '9999',
-      assignee: name,
-    };
-    const x = v[sort.key](a);
-    const y = v[sort.key](b);
-    return (x < y ? -1 : x > y ? 1 : 0) * sort.dir;
-  });
-
-  const th = (key: SortKey, label: string, width?: number) => (
-    <th scope="col" style={{ width }} aria-sort={sort.key === key ? (sort.dir === 1 ? 'ascending' : 'descending') : 'none'}>
-      <button type="button" className="th-btn" onClick={() => setSort((s) => ({ key, dir: s.key === key ? ((s.dir * -1) as 1 | -1) : 1 }))}>
-        {label}
-        {sort.key === key && <Icon name={sort.dir === 1 ? 'chevronUp' : 'chevronDown'} size={14} />}
-      </button>
-    </th>
-  );
-
-  if (!items.length)
-    return (
-      <div className="page">
-        <Empty icon="list" title="No tasks in this sprint yet"><span>Add items from the backlog or create tasks on the board.</span></Empty>
-      </div>
-    );
-
-  return (
-    <div className="page" style={{ paddingTop: 16 }}>
-      <div className="table-wrap">
-        <table className="table">
-          <thead>
-            <tr>
-              {th('key', 'ID', 100)}
-              <th scope="col">Task</th>
-              {th('status', 'Status', 160)}
-              {th('weight', 'Weight', 100)}
-              {th('assignee', 'Assignee', 200)}
-              {th('due', 'Due', 160)}
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((i) => {
-              const m = members.find((x) => x.id === i.assigneeId) ?? null;
-              const due = i.dueDate && i.status !== 'done' ? fmtDue(i.dueDate, today) : null;
-              return (
-                <tr key={i.id} className="clickable">
-                  <td className="muted num">{i.key}</td>
-                  <td>
-                    <div className="row">
-                      <TypeBadge type={i.type} />
-                      <button type="button" className="task-card-title truncate" onClick={() => setParams({ task: i.id })}>{i.title}</button>
-                      {i.parentId && (() => {
-                        const parent = items.find((x) => x.id === i.parentId);
-                        return parent ? <span className="muted truncate" style={{ fontSize: 12 }}>in {parent.key}</span> : null;
-                      })()}
-                    </div>
-                  </td>
-                  <td><ItemStatusBadge item={i} /></td>
-                  <td className="num">{i.weight ?? <span style={{ color: 'var(--warning-text)' }}>—</span>}</td>
-                  <td><span className="row"><Avatar member={m} /> <span className="truncate">{m?.name ?? 'Unassigned'}</span></span></td>
-                  <td>{due ? <span className={`chip-date ${due.tone === 'neutral' ? '' : due.tone}`}>{due.label}</span> : <span className="subtle">—</span>}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
 }
 
 /* ---------- Report ---------- */

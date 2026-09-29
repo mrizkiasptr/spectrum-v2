@@ -18,7 +18,7 @@ import { SettingsTab } from './pages/project/SettingsTab';
 import { SprintsTab } from './pages/project/SprintsTab';
 import { SprintBoard } from './pages/sprint/SprintBoard';
 import { SprintLayout } from './pages/sprint/SprintLayout';
-import { SprintReport, SprintRetro, SprintReview, SprintTaskList } from './pages/sprint/SprintTabs';
+import { SprintReport, SprintRetro, SprintReview } from './pages/sprint/SprintTabs';
 
 const LATER: [string, string][] = [
   ['/home', 'Home'],
@@ -43,7 +43,7 @@ export default function App() {
         <Route path="projects/tribe/:tribe" element={<TribePage />} />
         <Route path="projects/:projectId/sprints/:sprintId" element={<SprintLayout />}>
           <Route index element={<SprintBoard />} />
-          <Route path="list" element={<SprintTaskList />} />
+          <Route path="list" element={<Navigate to={{ pathname: '..', search: '?view=list' }} replace />} />
           <Route path="report" element={<SprintReport />} />
           <Route path="review" element={<SprintReview />} />
           <Route path="retro" element={<SprintRetro />} />

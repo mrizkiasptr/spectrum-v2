@@ -502,3 +502,19 @@ h1, h2, h3, h4, p { margin: 0; }
   .board-toolbar > .row { width: 100%; }
   .board-toolbar .search-box { width: 100% !important; }
 }
+
+/* ---------- Sprint list view ---------- */
+.list-wrap { max-width: 100%; min-width: 0; overflow-x: auto; }
+.list-view { table-layout: fixed; width: 100%; min-width: 880px; }
+.list-view th, .list-view td { overflow: hidden; position: relative; }
+.list-view td { vertical-align: middle; }
+.list-view tr.list-parent td { background: #fff; border-top: 1px solid var(--border); }
+.list-view tr.list-child td { background: var(--surface-muted); padding-top: 6px; padding-bottom: 6px; border-top: 1px solid var(--border-soft); }
+.list-view tr.list-add td { padding-top: 2px; padding-bottom: 6px; }
+.list-child-key { padding-left: 30px; }
+.list-branch { width: 10px; height: 10px; border-left: 1.5px solid var(--border-strong); border-bottom: 1.5px solid var(--border-strong); border-bottom-left-radius: 4px; margin-top: -6px; flex: none; }
+.list-select { position: relative; display: inline-flex; align-items: center; }
+.list-select-icon { position: absolute; left: 10px; display: flex; pointer-events: none; }
+.list-select .filter-select { padding-left: 30px; height: 30px; border-radius: 999px; font-size: 12px; max-width: 150px; }
+.list-assignee { height: 30px; font-size: 12px; min-width: 0; width: 100%; max-width: 136px; text-overflow: ellipsis; border-color: transparent; background-color: transparent; }
+.list-assignee:hover, .list-assignee:focus { border-color: var(--border); background-color: #fff; }

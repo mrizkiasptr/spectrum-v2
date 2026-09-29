@@ -1,11 +1,11 @@
-import { useMemo, useState, type DragEvent } from 'react';
+import { Fragment, useMemo, useState, type DragEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Icon } from '../../components/Icon';
 import { toast } from '../../components/toast';
 import { Avatar, ColumnIcon, ItemStatusBadge, MenuButton, SeverityBadge, TypeBadge } from '../../components/ui';
 import { fmtDue } from '../../domain/dates';
 import { boardCards, tasksOf } from '../../domain/hierarchy';
-import type { ItemType, WorkflowStatus, WorkItem } from '../../domain/types';
+import type { ItemType, Member, WorkflowStatus, WorkItem } from '../../domain/types';
 import { columnOf, firstOfCategory } from '../../domain/workflow';
 import { NewItemDialog, NewTaskDialog } from '../../features/dialogs';
 import { WorkflowDialog } from '../../features/WorkflowEditor';
@@ -14,7 +14,8 @@ import { useStore } from '../../store/useStore';
 import { useSprintCtx } from './SprintLayout';
 
 const DONE_PREVIEW = 5;
-type View = 'lanes' | 'flat';
+type View = 'kanban' | 'list';
+type Group = 'item' | 'none';
 
 function usePref<T extends string>(key: string, initial: T): [T, (v: T) => void] {
   const [v, setV] = useState<T>(() => {
@@ -38,8 +39,9 @@ function usePref<T extends string>(key: string, initial: T): [T, (v: T) => void]
 }
 
 /**
- * Sprint taskboard. Default view: one lane per backlog item, its tasks in the workflow columns
- * (items not broken down yet show as a card themselves). "Columns" view: all cards per column.
+ * Sprint workspace. Kanban: workflow columns, grouped into one row per backlog item (default)
+ * or not grouped. List: a table of backlog items with their tasks nested underneath.
+ * Items not broken into tasks yet show as their own card or row.
  */
 export function SprintBoard() {
   const { project, sprint } = useSprintCtx();
@@ -54,7 +56,15 @@ export function SprintBoard() {
   const mine = params.get('mine') === '1';
   const [q, setQ] = useState('');
   const [type, setType] = useState<ItemType | 'all'>('all');
-  const [view, setView] = usePref<View>('sb-view', 'lanes');
+  const [viewPref, setViewPref] = usePref<View>('sb-view2', 'kanban');
+  const view: View = params.get('view') === 'list' ? 'list' : params.get('view') === 'kanban' ? 'kanban' : viewPref;
+  const setView = (v: View) => {
+    setViewPref(v);
+    const next = new URLSearchParams(params);
+    next.set('view', v);
+    setParams(next, { replace: true });
+  };
+  const [group, setGroup] = usePref<Group>('sb-group', 'item');
   const [dragId, setDragId] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
   const [addTask, setAddTask] = useState<{ parentId?: string; statusId?: string } | null>(null);
@@ -287,10 +297,19 @@ export function SprintBoard() {
             <option value="story">Backlog</option>
             <option value="bug">Bugs</option>
           </select>
-          <div className="seg" role="radiogroup" aria-label="Board layout">
-            <button type="button" role="radio" aria-checked={view === 'lanes'} onClick={() => setView('lanes')} title="One row per backlog item">By item</button>
-            <button type="button" role="radio" aria-checked={view === 'flat'} onClick={() => setView('flat')} title="All cards per column">Columns</button>
+          <div className="seg" role="radiogroup" aria-label="View">
+            <button type="button" role="radio" aria-checked={view === 'kanban'} onClick={() => setView('kanban')}><Icon name="kanban" size={15} /> Kanban</button>
+            <button type="button" role="radio" aria-checked={view === 'list'} onClick={() => setView('list')}><Icon name="list" size={15} /> List</button>
           </div>
+          {view === 'kanban' && (
+            <>
+              <label className="sr-only" htmlFor="sb-group">Group cards</label>
+              <select id="sb-group" className="filter-select" value={group} onChange={(e) => setGroup(e.target.value as Group)}>
+                <option value="item">Group: Backlog item</option>
+                <option value="none">Group: None</option>
+              </select>
+            </>
+          )}
         </div>
         {!readOnly && (
           <div className="row" style={{ gap: 8 }}>
@@ -306,7 +325,7 @@ export function SprintBoard() {
                   <button type="button" role="menuitem" onClick={() => { close(); setEditingColumns(true); }}>
                     <Icon name="sliders" size={16} /> Edit columns
                   </button>
-                  {view === 'lanes' && (
+                  {(view === 'list' || group === 'item') && (
                     <button
                       type="button"
                       role="menuitem"
@@ -325,7 +344,21 @@ export function SprintBoard() {
         )}
       </div>
 
-      {view === 'lanes' ? (
+      {view === 'list' ? (
+        <SprintListView
+          lanes={lanes}
+          workflow={workflow}
+          members={members}
+          today={today}
+          readOnly={readOnly}
+          collapsed={collapsed}
+          onToggle={(id, isCollapsed) => setCollapsed((c) => ({ ...c, [id]: !isCollapsed }))}
+          onOpen={openTask}
+          onAddTask={(parentId) => setAddTask({ parentId })}
+          onUpdate={updateItem}
+          emptyText={scope.some((i) => i.type !== 'task') ? 'Nothing matches these filters.' : 'No backlog items in this sprint yet. Plan backlog items from the Backlog, then break them into tasks here.'}
+        />
+      ) : group === 'item' ? (
         <div className="taskboard" role="table" aria-label="Sprint taskboard" style={{ gridTemplateColumns: gridCols }}>
           <div className="tb-head tb-corner" role="columnheader">
             <div className="khead">
@@ -433,6 +466,179 @@ export function SprintBoard() {
       {addTask && <NewTaskDialog projectId={project.id} sprintId={sprint.id} parentId={addTask.parentId} statusId={addTask.statusId} onClose={() => setAddTask(null)} />}
       {addItem && <NewItemDialog projectId={project.id} sprintId={sprint.id} onClose={() => setAddItem(false)} />}
       {editingColumns && <WorkflowDialog project={project} onClose={() => setEditingColumns(false)} />}
+    </div>
+  );
+}
+
+interface Lane {
+  item: WorkItem;
+  tasks: WorkItem[];
+  cards: WorkItem[];
+}
+
+/** List view: backlog items as parent rows, their tasks nested; status and assignee editable inline. */
+function SprintListView({
+  lanes,
+  workflow,
+  members,
+  today,
+  readOnly,
+  collapsed,
+  onToggle,
+  onOpen,
+  onAddTask,
+  onUpdate,
+  emptyText,
+}: {
+  lanes: Lane[];
+  workflow: WorkflowStatus[];
+  members: Member[];
+  today: string;
+  readOnly: boolean;
+  collapsed: Record<string, boolean>;
+  onToggle: (id: string, isCollapsed: boolean) => void;
+  onOpen: (id: string) => void;
+  onAddTask: (parentId: string) => void;
+  onUpdate: (id: string, patch: Partial<WorkItem>) => void;
+  emptyText: string;
+}) {
+  const statusCell = (i: WorkItem, derived: boolean) => {
+    const column = columnOf(workflow, i);
+    if (derived || readOnly) {
+      return (
+        <span className="row" style={{ gap: 6 }} title={derived ? 'Follows its tasks' : undefined}>
+          <ItemStatusBadge item={i} />
+        </span>
+      );
+    }
+    return (
+      <span className="list-select">
+        <span className="list-select-icon"><ColumnIcon column={column} size={14} /></span>
+        <label className="sr-only" htmlFor={`ls-${i.id}`}>Status of {i.key}</label>
+        <select id={`ls-${i.id}`} className="filter-select" value={column.id} onChange={(e) => onUpdate(i.id, { statusId: e.target.value })}>
+          {workflow.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+        </select>
+      </span>
+    );
+  };
+
+  const assigneeCell = (i: WorkItem) => {
+    const m = members.find((x) => x.id === i.assigneeId) ?? null;
+    if (readOnly) return <span className="row" style={{ gap: 6 }}><Avatar member={m} /> {m?.name ?? <span className="subtle">Unassigned</span>}</span>;
+    return (
+      <span className="row" style={{ gap: 6, minWidth: 0 }}>
+        <Avatar member={m} />
+        <label className="sr-only" htmlFor={`la-${i.id}`}>Assignee of {i.key}</label>
+        <select id={`la-${i.id}`} title={m?.name ?? 'Unassigned'} className="filter-select list-assignee" value={i.assigneeId ?? ''} onChange={(e) => onUpdate(i.id, { assigneeId: e.target.value || null })}>
+          <option value="">Unassigned</option>
+          {members.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+        </select>
+      </span>
+    );
+  };
+
+  const dueCell = (i: WorkItem) => {
+    if (!i.dueDate || i.status === 'done') return <span className="subtle">—</span>;
+    const due = fmtDue(i.dueDate, today);
+    return <span className={`chip-date ${due.tone === 'neutral' ? '' : due.tone}`}>{due.label}</span>;
+  };
+
+  if (!lanes.length) return <div className="table-wrap"><div className="tb-empty">{emptyText}</div></div>;
+
+  return (
+    <div className="table-wrap list-wrap">
+      <table className="table list-view">
+        <thead>
+          <tr>
+            <th scope="col" style={{ width: 128 }}>ID</th>
+            <th scope="col">Title</th>
+            <th scope="col" style={{ width: 168 }}>Status</th>
+            <th scope="col" style={{ width: 176 }}>Assignee</th>
+            <th scope="col" style={{ width: 96 }}>Due</th>
+            <th scope="col" style={{ width: 68, textAlign: 'right' }}>Weight</th>
+            <th scope="col" style={{ width: 112 }}>Tasks</th>
+          </tr>
+        </thead>
+        <tbody>
+          {lanes.map(({ item, tasks, cards }) => {
+            const isCollapsed = collapsed[item.id] ?? item.status === 'done';
+            const done = tasks.filter((t) => t.status === 'done').length;
+            const shownTasks = tasks.length ? cards : [];
+            return (
+              <Fragment key={item.id}>
+                <tr className="list-parent">
+                  <td>
+                    <span className="row" style={{ gap: 4 }}>
+                      <button
+                        type="button"
+                        className="icon-btn sm"
+                        aria-expanded={!isCollapsed}
+                        aria-label={`${isCollapsed ? 'Show' : 'Hide'} tasks of ${item.key}`}
+                        disabled={!tasks.length}
+                        style={{ visibility: tasks.length ? 'visible' : 'hidden' }}
+                        onClick={() => onToggle(item.id, isCollapsed)}
+                      >
+                        <Icon name={isCollapsed ? 'chevronRight' : 'chevronDown'} size={14} />
+                      </button>
+                      <span className="kcard-key num" style={{ fontSize: 12 }}>{item.key}</span>
+                    </span>
+                  </td>
+                  <td>
+                    <span className="row" style={{ gap: 8, minWidth: 0 }}>
+                      <TypeBadge type={item.type} />
+                      {item.severity && item.severity !== 'minor' && <SeverityBadge severity={item.severity} />}
+                      <button type="button" className="kcard-title truncate" style={{ fontSize: 14 }} onClick={() => onOpen(item.id)}>{item.title}</button>
+                    </span>
+                  </td>
+                  <td>{statusCell(item, tasks.length > 0)}</td>
+                  <td>{assigneeCell(item)}</td>
+                  <td>{dueCell(item)}</td>
+                  <td className="num" style={{ textAlign: 'right', fontWeight: 600, color: item.weight === null ? 'var(--warning-text)' : undefined }}>{item.weight ?? '—'}</td>
+                  <td>
+                    {tasks.length ? (
+                      <span className="tb-lane-progress" title={`${done} of ${tasks.length} tasks done`}>
+                        <span className="tb-progress" style={{ width: 56 }}><span style={{ width: `${(done / tasks.length) * 100}%` }} /></span>
+                        <span className="num">{done}/{tasks.length}</span>
+                      </span>
+                    ) : !readOnly ? (
+                      <button type="button" className="btn-link" style={{ fontSize: 12 }} onClick={() => onAddTask(item.id)}>Break into tasks</button>
+                    ) : (
+                      <span className="subtle">—</span>
+                    )}
+                  </td>
+                </tr>
+                {!isCollapsed &&
+                  shownTasks.map((t) => (
+                    <tr key={t.id} className="list-child">
+                      <td><span className="kcard-key num list-child-key">{t.key}</span></td>
+                      <td>
+                        <span className="row" style={{ gap: 8, minWidth: 0, paddingLeft: 18 }}>
+                          <span className="list-branch" aria-hidden="true" />
+                          <button type="button" className="kcard-title truncate" style={{ fontWeight: 500 }} onClick={() => onOpen(t.id)}>{t.title}</button>
+                        </span>
+                      </td>
+                      <td>{statusCell(t, false)}</td>
+                      <td>{assigneeCell(t)}</td>
+                      <td>{dueCell(t)}</td>
+                      <td />
+                      <td />
+                    </tr>
+                  ))}
+                {!isCollapsed && tasks.length > 0 && !readOnly && (
+                  <tr className="list-child list-add">
+                    <td />
+                    <td colSpan={6}>
+                      <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--primary-darker)', marginLeft: 18 }} onClick={() => onAddTask(item.id)}>
+                        <Icon name="plus" size={14} /> Add task to {item.key}
+                      </button>
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
